@@ -1,0 +1,492 @@
+archetype rrNFT(
+creator: address,
+minter: address,
+royaltyRate: rational,
+minterRate: rational,
+marketRate: rational,
+auctionDuration : duration,
+gracePeriod: duration
+// const artworkMetaData: bytes
+)
+with metadata "" 
+
+
+//TODO make contract a state machine with states:
+//TidemarkAuction (standard state)
+//Grace Period (after a tidemark auction concludes, the owner has a grace period to pay royalties to keep the NFT)
+//SaleAuction (an auction with no grace period)
+//Sold (waiting for collection - any entrypoint called will transfer the NFT to the winner)
+
+
+//URL to the metatdata on IPFS or other goes in the quotes above//
+
+variable tidemarkAuctionDate : date = 1970-01-01
+variable owner : address = creator
+
+variable tidemark : tez = 0tz
+variable bidder : option<address> = none
+variable bid : option<tez> = none
+variable lastBuyer : option<address> = none
+variable AuctionType : string = "Tidemark"
+variable lastSalePrice : tez = 0tz
+variable bidRemainderAfterFees : tez = 0tz
+
+variable creatorFeesPaid : tez = 0tz
+variable minterFeesPaid : tez = 0tz
+//TODO marketFeesPaid should only increase if the marketplace address does not equal the creators
+variable marketPlaceFeesPaid : tez = 0tz
+
+variable creatorFeesSinceLastSale : tez = 0tz
+
+variable initiated : bool = false
+
+variable ownerNum : nat = 1
+
+variable testSummedBurden : tez = 0tz
+
+variable testSummedBurdenPaid : tez = 0tz
+
+variable testSummedBalanceWithContract : rational = 0
+
+variable answer : rational = 0
+
+
+asset bids {
+  bidSubmitted : tez;
+  marketplace : address;
+  bidderSubmitting : address;
+  bidProportion : rational;
+  //TODO update bidProportion to be an option value
+}
+
+asset ownerHistory identified by ownerNumber {
+      //TODO update these types to be options
+  ownerNumber : nat;
+  ownerAddress : address;
+  datePurchased : date;
+  price : tez;
+  timeHeld : duration;
+  burdenPaid : tez;
+
+}
+
+asset ownerHistoryWorkSpace identified by ownerNumber2 {
+      //TODO update these types to be options
+  ownerNumber2 : nat;
+  ownerAddress2 : address;
+  datePurchased2 : date;
+  price2 : tez;
+  timeHeld2 : duration;
+  fairBurden2 : tez;
+  burdenPaid2 : tez;
+  balanceWithContract2 : rational = 0;
+
+}
+
+// entry sumBurden() {
+//   const summedBurden = ownerHistoryWorkSpace.sum(fairBurden2);
+//   const summedBurdenPaid = ownerHistoryWorkSpace.sum(burdenPaid2);
+//   for o in ownerHistoryWorkSpace do
+//     const bwc = (ownerHistoryWorkSpace[o].fairBurden2/1mtz) - (ownerHistoryWorkSpace[o].burdenPaid2/1mtz);
+//     ownerHistoryWorkSpace.update(o, {
+//       balanceWithContract2 = bwc
+//     })
+//   done;
+//   const negBalances = ownerHistoryWorkSpace.select(balanceWithContract2 < 0);
+//   const summedBalanceWithContract = negBalances.sum(balanceWithContract2);
+//   testSummedBurden := summedBurden;
+//   testSummedBurdenPaid := summedBurdenPaid;
+//   testSummedBalanceWithContract := summedBalanceWithContract;
+// }
+
+entry addNewOwner() {
+  called by self_address
+  effect {
+    ownerNum := ownerNum + 1;
+    ownerHistory.add({
+      ownerNumber = ownerNum;
+      ownerAddress = caller;
+      datePurchased = now;
+      price = 0mtz;
+      timeHeld = 0s;
+      burdenPaid = 0tz
+    });
+  }
+}
+
+entry initiate() {
+  called by creator
+  require { 
+      r_initFalse: initiated = false otherwise "contract already initiated"
+  } effect {
+
+  const endDateConst = now + auctionDuration; 
+  tidemarkAuctionDate := endDateConst;
+  initiated := true;
+
+  transfer 0tz to entry self.addNewOwner();
+  }
+}
+
+entry updateCurrentOwnerDuration() {
+  called by self_address 
+  effect {
+    const currentOwnerView = ownerHistory.tail(1);
+    for currentOwner in currentOwnerView do
+    const timeHeldConst = now - ownerHistory[currentOwner].datePurchased;
+      ownerHistory.update(currentOwner, {
+        timeHeld = timeHeldConst
+      });
+    done;
+  }
+}
+
+
+entry makeOffer(currentMarketplace: address) {
+    require {
+    r_bidNotZero: transferred > 0tz otherwise "Your bid must be greater than Zero";
+    r_higherBid: bid ? transferred > the : true otherwise "your Bid must be higher than current bid";
+    r_bidderNotCaller : caller <> owner otherwise "The owner's address may not bid";
+    r_auctionOngoing: tidemarkAuctionDate > now otherwise "The auction has already concluded";
+  } effect {
+    //if there have been any bids since the last sale...
+  if bid.is_some() and bidder.is_some() then begin
+    // extract the values from the bid and bidder options
+    // that represent the previous top bidder's data
+    const bidConst ?= bid;
+    const bidderConst ?= bidder;
+    // and pay back the previous top bidder with the incoming bid
+    transfer bidConst to bidderConst;
+  end;
+    //set the bid and bidder variables to match the new top bidder
+    bid := some(transferred);
+    bidder := some(caller);
+
+    bids.add({
+    bidSubmitted = transferred;
+    marketplace = currentMarketplace;
+    bidderSubmitting = caller;
+    //What is bidProportion?
+    bidProportion = 0
+    });  
+
+    // transfer 0tz to entry self.updateCurrentOwnerDuration(); 
+    //vv updateCurrentOwnerDuration vv This should be pulled out into an entrypoint - but they seem to be synchronous
+    const currentOwnerView = ownerHistory.tail(1);
+    for currentOwner in currentOwnerView do
+    const timeHeldConst = now - ownerHistory[currentOwner].datePurchased;
+      ownerHistory.update(currentOwner, {
+        timeHeld = timeHeldConst
+      });
+    done; 
+
+    //if the bid is higher than the tidemark (highest ever bid),
+    //then handle the tidemark. Otherwise 
+    if transferred > tidemark then begin
+    //find the difference (diff) between the bid and the tidemark 
+    var diff = transferred - tidemark;
+    // var bidTez = bid ? the : 0tz;
+    // calculate the fees for the creator, minter and that which remains
+    // of the bidders offer
+    // const minterFee = minterRate * bidTez;
+    // const marketFee = marketRate * bidTez;
+    const creatorFee = royaltyRate * diff;
+    // bidRemainderAfterFees := transferred - (creatorFee + minterFee + marketFee); 
+
+    //update the tidemark to equal the amount offered
+    tidemark := transferred;
+    //Pay creator and Minter
+    // fail(("creatorFee", creatorFee));
+    transfer creatorFee to creator;
+    creatorFeesPaid := creatorFeesPaid + creatorFee;
+    creatorFeesSinceLastSale := creatorFeesSinceLastSale + creatorFee ;
+    end;
+
+  }
+}
+
+
+entry sell() {
+  require{
+    r_caller_is_owner_or_self: caller = owner or caller = self_address otherwise "Only the owner may sell the token";
+  }
+  effect {
+    var bidTez = bid ? the : 0tz;
+    var remainingBalance : tez = balance;
+
+    const minterFee = minterRate * bidTez;
+    transfer minterFee to minter;
+    minterFeesPaid := minterFeesPaid + minterFee;
+    remainingBalance := remainingBalance - minterFee; 
+
+//CALCULATE SHARES TO PAY TO EACH MARKETPLACE
+
+    var prevBid = 0tz;
+    for currentBid in bids do
+      var currentBidProp = (currentBid - prevBid) / bidTez;
+      bids.update(currentBid, {
+      bidProportion := currentBidProp
+      });
+      prevBid := currentBid;
+    done;
+    for currentBid in bids do
+      const currentMarketplace = bids[currentBid].marketplace;
+      const bidProp = bids[currentBid].bidProportion;
+      const shareAmount = bidProp * marketRate * bidTez;
+      transfer shareAmount to currentMarketplace;
+      marketPlaceFeesPaid := marketPlaceFeesPaid + shareAmount;
+      remainingBalance := remainingBalance - shareAmount;
+    done;
+
+//MARKETPLACE SPLIT DONE
+
+//CALCULATE FEE FOR ROYALTY REDISTRIBUTION AND REDISTRIBUTE
+
+//Get a view to sort the past owners by price
+
+
+//Prepare Work Space
+ownerHistoryWorkSpace.remove_all();
+for o in ownerHistory do
+
+    ownerHistoryWorkSpace.add({
+    ownerNumber2 = o;
+    ownerAddress2 = ownerHistory[o].ownerAddress;
+    datePurchased2 = ownerHistory[o].datePurchased;
+    price2 = ownerHistory[o].price;
+    timeHeld2 = ownerHistory[o].timeHeld;
+    fairBurden2 = 0tz;
+    burdenPaid2 = ownerHistory[o].burdenPaid;
+    balanceWithContract2 = 0
+    });
+
+if (bidTez < ownerHistoryWorkSpace[o].price2) then
+    ownerHistoryWorkSpace.update(o, {
+      price2 = bidTez
+    });
+
+done;
+
+
+//Prepare Work Space
+const ownerHistoryWSByPrice = ownerHistoryWorkSpace.sort(price2);
+
+//"line" refers to a price and Cut to what that horizontal line cuts through in a diagram of this technique
+//"band" refers to a tuple - the previous line and the current line.
+var theLine = 0mtz;
+var theBand = (0tz, theLine);
+
+for o in ownerHistoryWSByPrice do
+    
+    if ownerHistory[o].price > theLine then begin
+    theBand[0] := theLine;
+    theLine := ownerHistory[o].price;
+    theBand[1] := theLine;
+
+    //royaltyToSplit is the distance between the two prices in the band  
+    var royaltyToSplit = royaltyRate * (theBand[1] - theBand[0]);
+    const ownerHistoryWSCut = ownerHistoryWSByPrice.select(price2 >= theLine);
+    const totalDurationCut = ownerHistoryWSCut.sum(timeHeld2/1s);
+    for oo in ownerHistoryWSCut do
+    const currentOwnerDuration = ownerHistoryWorkSpace[oo].timeHeld2/1s;
+    const proportionOfBurden = currentOwnerDuration / totalDurationCut;
+    const ooFairBurdenWithinBand = proportionOfBurden * royaltyToSplit;
+    ownerHistoryWorkSpace.update(oo, {fairBurden2 += ooFairBurdenWithinBand});
+    done;
+    end;
+
+  //
+
+done;
+
+
+//Refund previous owners
+
+for o in ownerHistoryWorkSpace do
+  const balanceWithContract = (ownerHistoryWorkSpace[o].fairBurden2/1mtz) - (ownerHistoryWorkSpace[o].burdenPaid2/1mtz);
+  if balanceWithContract < 0 then begin
+    //some very minor rounding occurs here as the rational type is converted to tez 
+  const refundMtz = balanceWithContract*1mtz;
+  remainingBalance := remainingBalance - refundMtz;
+  transfer refundMtz to ownerHistoryWorkSpace[o].ownerAddress2;
+end
+done;
+
+//REDISTRIBUTION END
+
+// TRANSFER OWNERSHIP, PAY SELLER
+    bids.remove_all();
+    bid := none;
+
+    transfer remainingBalance to owner;
+    
+    const newOwner ?= bidder : "error message"; //Can I replace newOwner with Owner? Or are storage variables only settled at the end of the transaction?
+    owner := newOwner;
+
+//THE BELOW CODE SHOULD BE PULLED INTO ITS OWN ENTRYPOINT
+//Don't know how to handle the async nature of entrypoints as of yet
+    ownerNum := ownerNum + 1;
+    ownerHistory.add({
+      ownerNumber = ownerNum;
+      ownerAddress = newOwner;
+      datePurchased = now;
+      price = bidTez;
+      timeHeld = 0s;
+      burdenPaid = creatorFeesSinceLastSale
+    });
+
+    creatorFeesSinceLastSale := 0tz;
+    bidder := none;
+    tidemarkAuctionDate := now + auctionDuration;
+  }
+  }
+
+entry claim() {
+  require { 
+      r_auction_expired: tidemarkAuctionDate < now otherwise "The auction has not yet concluded";
+      r_grace_period_elapsed: tidemarkAuctionDate + gracePeriod < now otherwise "The grace period has not yet elapsed";
+  } effect {
+    transfer 0tz to entry self.sell();
+  }
+}
+
+
+entry topUp() {
+  called by owner
+  require {
+  //STATE = GRACE PERIOD
+  r_auction_expired2: tidemarkAuctionDate < now otherwise "The auction has not yet concluded";
+  r_bidder_is_some: is_some(bidder) otherwise "There is no bidder";
+  r_bid_is_some: is_some(bid) otherwise "There is no bid";
+  } effect {
+  
+  if (tidemarkAuctionDate + gracePeriod < now) then begin
+    transfer 0tz to entry self.sell();
+  end;
+    // extract the values from the bid and bidder options
+    // that represent the previous top bidder's data
+    const bidConst ?= bid;
+    const bidderConst ?= bidder;
+    // and pay back the previous top bidder with the incoming bid
+    transfer bidConst to bidderConst;
+
+  transfer creatorFeesSinceLastSale to creator;
+  creatorFeesSinceLastSale := 0tz;
+  bid := none;
+  bidder := none;
+  bids.remove_all();
+  tidemarkAuctionDate := now + auctionDuration;
+
+  }
+}
+
+entry bringTidemarkAuctionForward(newDate : date) {
+  //STATE = TIDEMARK_AUCTION
+called by owner
+require {
+  r_requested_auction_date_before_current: newDate < tidemarkAuctionDate otherwise "The requested tidemark auction date may only be before the current tidemark date";
+}
+effect {
+  tidemarkAuctionDate := newDate;
+  }
+}
+
+//UTILS
+
+function sq(target: rational, l: rational, u: rational) : rational {
+  //TODO - increase efficiency of this square root function, possibly
+  //with https://www.geeksforgeeks.org/find-square-root-of-a-number-using-bit-manipulation/
+  var mid : rational = 0;
+  var attempt : rational = 0;
+  var lower = l;
+  var upper = u;
+  iter k to 10 do
+    mid := ((lower+upper) / 2);
+    attempt := mid*mid;
+    if (attempt = target) then begin
+      lower := mid;
+      upper := mid;
+    end;
+    if (attempt < target) then
+      lower := mid
+    else
+      upper := mid
+    done;
+    return mid
+}
+
+function sqrt(target: rational) : rational {
+  return sq(target, 0, 1)
+}
+
+function expCurve(x: rational) : rational {
+  return ((1 / sqrt(1-x)) - 1)
+}
+
+function sliceArea(a: rational, b: rational) : rational {
+  const width = b-a;
+  const base = width * a;
+  const fa = expCurve(a);
+  const fb = expCurve(b);
+  const hat = (fb-fa)*width*0.5;
+  return (hat + base)
+}
+
+function integrateExpCurve(a: rational, b: rational) : rational {
+  var z: rational = 0;
+  if (b > 0.9999) then z := 0.9999 else z := b;
+  var step: rational = 0.01;
+  var l = a;
+  var r = l + step;
+  var sum: rational = 0;
+  while (r < z) do 
+    sum := sum + sliceArea(l,r);
+    l := r;
+    r := r + step;
+    done;
+  sum := sum + sliceArea(l,z); 
+
+  return (sum)
+}
+
+// function integrate(a: rational, b: rational) : rational {
+
+//   const n: rational = 100;
+//   var x: rational = (z-a)/n;
+//   var sum: rational = 0;
+//   var i: nat = 0;
+//   while i <= n do
+//     sum += expCurve(a + i*x);
+//     i := i + 1;
+//   done;
+//   return sum
+// }
+
+entry integrateExpCurveTest(a: rational, b: rational) {
+  answer := integrateExpCurve(a,b);
+}
+
+entry sliceAreaTest(a: rational, b: rational) {
+  answer := sliceArea(a,b);
+}
+
+
+
+
+
+//For testing squareRoot function:
+// variable answer : rational = 0
+
+// entry squareRoot(target: rational) {
+  
+//   answer := sqrt(target);
+// }
+
+// variable answer2 : rational = 0
+
+// entry sliceAreaTest(a: rational, b: rational) {
+//   answer2 := sliceArea(a,b);
+// }
+
+
+// I’m trying to consolidate some repetitive code, but because the code makes updates to storage assets I believe I can’t use functions for this (which do seem to be async as you would expect). If I pull the repetitive code out into an entrypoint and call that, the code no longer seems to be making the required changes and my code is breaking a few lines later (my guess is that this is because it is synchronous). 
