@@ -25,20 +25,16 @@ export const [
   useContractAddress,
   useNetwork,
   useIPFSBrowser,
-  useGitRepo,
-  useHelpUrl,
   useSwitchTheme,
 ] = constate(
   () => {
     const [settingState, setState] = useState({
-      app_name        : 'Poll DAPP',
+      app_name        : 'Tidemark',
       endpoint        : 'https://ghostnet.ecadinfra.com',
-      contract        : 'KT1FcUNmyZ255yyfqWL3GC1AGqSY2vKqYwEg',
+      contract        : 'KT1TeszFHXLbaacwBK6YRpf4gHaCgcEwygx1',
       ipfs_browser    : 'https://gateway.pinata.cloud/ipfs/',
       network         :  NetworkType.GHOSTNET,
       theme           :  Theme.Default,
-      git_repo        : 'https://github.com/completium/poll-dapp/tree/main',
-      help            : 'https://archetype-lang.org/docs/dapps/example/'
     });
     const defaultDark = useMediaQuery('(prefers-color-scheme: dark)');
     const switchTheme = () => { setState(s => { return { ...s, theme : switch_theme(s.theme, defaultDark) }}) }
@@ -50,7 +46,5 @@ export const [
   v => v.settingState.contract,
   v => v.settingState.network,
   v => v.settingState.ipfs_browser,
-  v => v.settingState.git_repo,
-  v => v.settingState.help,
   v => v.setters.switchTheme
 );
