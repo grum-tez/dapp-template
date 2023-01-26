@@ -1,12 +1,18 @@
 import CssBaseline from '@mui/material/CssBaseline';
-import './App.css';
-import { SettingsProvider } from './contexts/Settings';
+import Paper from '@mui/material/Paper';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import useMediaQuery from '@mui/material/useMediaQuery';
+
+import { SettingsProvider, Theme, useTheme } from './contexts/Settings';
 import { TaquitoProvider } from './contexts/Taquito';
 import { BeaconProvider } from './contexts/Beacon';
 import { ContractProvider } from './contexts/Contract';
-import { createBrowserRouter } from 'react-router-dom';
+
 import { Basic } from './routes/BasicPage';
-import { RouterProvider } from 'react-router';
+
+import './App.css';
+
 const router = createBrowserRouter([
   {
     path: "/basic",
@@ -19,17 +25,27 @@ const router = createBrowserRouter([
 ]);
 
 
-function App() {
+function DApp() {
+  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const theme   = useTheme()
+  const uiTheme = createTheme({
+    palette: {
+      mode: theme === Theme.Default && prefersDarkMode ? 'dark' : (theme === Theme.Dark ? 'dark' : 'light'),
+    },
+  });
   return (
-    <div className="App">
-      <CssBaseline />
-      <SettingsProvider>
+
+      <ThemeProvider theme={uiTheme}>
         <TaquitoProvider>
           <BeaconProvider>
             <ContractProvider>
-              <p>"hi"</p>
-              <RouterProvider router = {router} />
-
+            <Paper elevation={0}>
+                    <div style={{ height: '100vh', overflow: 'auto' }}>
+                    {/* <TopBar></TopBar> */}
+                    <RouterProvider router={router} />
+                    {/* <EventAlert /> */}
+                    </div>
+                  </Paper>
 
 
 
@@ -39,6 +55,16 @@ function App() {
             </ContractProvider>
           </BeaconProvider>
         </TaquitoProvider>
+        </ThemeProvider>
+  );
+}
+
+function App() {
+  return (
+    <div className="App">
+      <CssBaseline />
+      <SettingsProvider>
+        <DApp />
       </SettingsProvider>
     </div>
   );
