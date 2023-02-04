@@ -1,7 +1,9 @@
-archetype test
+archetype simple(par : nat)
 
-variable msg : string = "Hello"
+variable res : nat = 0
+variable ser: nat = 1
 
-entry input(name : string) {
-  msg += (length(msg) > 5 ? "," : "") + " " + name
+entry exec (n : nat) {
+  res := n;
+  ser := par
 }

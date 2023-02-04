@@ -9,14 +9,20 @@ import { TaquitoProvider } from './contexts/Taquito';
 import { BeaconProvider } from './contexts/Beacon';
 import { ContractProvider } from './contexts/Contract';
 
-import { Basic } from './routes/BasicPage';
+import { BasicInfo } from './routes/BasicPage';
+import { MintPage } from './routes/MintPage';
 
 import './App.css';
+import { StrictMode } from 'react';
 
 const router = createBrowserRouter([
   {
     path: "/basic",
-    element: <Basic />,
+    element: <BasicInfo />,
+  },
+  {
+    path: "/mint",
+    element: <MintPage />,
   },
   // {
   //   path: "*",
@@ -46,12 +52,12 @@ function DApp() {
                     {/* <EventAlert /> */}
                     </div>
                   </Paper>
+{/* <StrictMode><MainPanel /></StrictMode> */}
 
 
 
 
-
-              {/* <MainPanel /> */}
+              
             </ContractProvider>
           </BeaconProvider>
         </TaquitoProvider>

@@ -4,6 +4,8 @@ import React from 'react';
 
 import { useAppName, useEndpoint, useNetwork } from "./Settings";
 import { useTezosToolkit } from "./Taquito";
+import { code as fa2nftJSON } from "./fa2nftJSON";
+import { getStorage } from './fa2nftJSON';
 
 export const [
   BeaconProvider,
@@ -11,14 +13,16 @@ export const [
   useWalletName,
   useConnect,
   useDisconnect,
-  useIsConnected
+  useIsConnected, 
+  useDeployContract
 ] = constate(
   MakeBeacon,
   (v) => v.beaconState.user_address,
   (v) => v.beaconState.wallet,
   (v) => v.utils.connect,
   (v) => v.utils.disconnect,
-  (v) => v.utils.is_connected
+  (v) => v.utils.is_connected,
+  (v) => v.utils.deployContract
 );
 
 function MakeBeacon() {
@@ -84,6 +88,33 @@ function MakeBeacon() {
   const is_connected = () => {
     return beaconState.user_address !== undefined
   }
+  interface fa2_params {
+    owner : undefined | string,
+    permits: undefined | string
+  }
+  
 
-  return { beaconState, utils : { connect, disconnect, is_connected } };
+const deployContract = async (parameters : fa2_params) => {
+
+  // const parameters = {
+  //   owner: beaconState.user_address,
+  //   permits: beaconState.user_address
+  // }
+  
+ttk.wallet.originate({
+  code: fa2nftJSON,
+  init: getStorage(parameters)
+})
+.send()
+.then((originationOp) => {
+  console.log(`Waiting for confirmation of origination...`);
+  return originationOp.contract();
+})
+.then((contract) => {
+  console.log(`Origination completed for ${contract.address}.`);
+})
+.catch((error) => console.log(`Error: ${JSON.stringify(error, null, 2)}`));
+}
+
+  return { beaconState, utils : { connect, disconnect, is_connected, deployContract } };
 }

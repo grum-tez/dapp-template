@@ -102,6 +102,7 @@ describe('[RRNFT] contract', async () => {
   });
 
   it('Creator address input matches creator address output', async () => {
+    console.log('creator Address as mich: ', creatorAddress.to_mich())
     const gotCreator = await rrNFT.get_creator()
     assert(creatorAddress.equals(gotCreator))
     })
@@ -204,87 +205,88 @@ function logTezChange (contractName: string, before: Tez, after: Tez) {
 // END WORKING
 
 
-// describe('[MAKE_OFFER] entrypoint', async () => {
+describe('[MAKE_OFFER] entrypoint', async () => {
 
-// //FIRST SCENARIO:
+//FIRST SCENARIO:
 
-// // 0. creator_one is current owner of the tidemark NFT. 
-// // 1. collector_two bids 10tz (make_offer).
-// // 2. collector_three bids 20tz (make_offer)
-// // 3. owner_one bids 45tz (make_offer)
-// // 4. creator_one accepts 45tz bid (sell)
+// 0. creator_one is current owner of the tidemark NFT. 
+// 1. collector_two bids 10tz (make_offer).
+// 2. collector_three bids 20tz (make_offer)
+// 3. owner_one bids 45tz (make_offer)
+// 4. creator_one accepts 45tz bid (sell)
 
-//   it('Fails if bid is 0tz', async () => {
-//     await expect_to_fail(async () => {
-//       await rrNFT.makeOffer(marketplace_one.get_address(), {amount: new Tez(0), as: collector_two})
-//     }, att.string_to_mich("\"Your bid must be greater than Zero\""))
-//     delay_mockup_now_by_minute(1)
-//   })
+  it('Fails if bid is 0tz', async () => {
+    await expect_to_fail(async () => {
+      await rrNFT.makeOffer(marketplace_one.get_address(), {amount: new Tez(0), as: collector_two})
+    }, att.string_to_mich("\"Your bid must be greater than Zero\""))
+    delay_mockup_now_by_minute(1)
+  })
 
-//   // it('Fails if ...', async () => {
-//   //   await expect_to_fail(async () => {
-//   //     await /* entrypoint call */)
-//   //   }, /* micheline error message */)
-//   // })
+  // it('Fails if ...', async () => {
+  //   await expect_to_fail(async () => {
+  //     await /* entrypoint call */)
+  //   }, /* micheline error message */)
+  // })
 
-//   const bid_one_amount = new Tez(10)
-//   const bid_two_amount = new Tez(20)
-//   const bid_three_amount = new Tez(45)
-
-
-//   it('Fails if bid is equal to current bid', async () => {
-//     // 1. collector_two bids 10tz (make_offer).
-//     await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_one_amount, as: collector_two})
-
-//     await expect_to_fail(async () => {
-//     await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_one_amount, as: collector_three})
-//     }, att.string_to_mich("\"your Bid must be higher than current bid\""))
-//   })
-
-//   it('Fails if bid is lower than current bid', async () => {
-//     await expect_to_fail(async () => {
-//     await rrNFT.makeOffer(marketplace_one.get_address(), {amount: new Tez(1), as: collector_three})
-//     }, att.string_to_mich("\"your Bid must be higher than current bid\""))
-//   })
-
-//   it('Fails if owner attempts to bid', async () => {
-//     await expect_to_fail(async () => {
-//     await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_two_amount, as: creator_one})
-//     }, att.string_to_mich("\"The owner's address may not bid\""))
-//   })
+  const bid_one_amount = new Tez(10)
+  const bid_two_amount = new Tez(20)
+  const bid_three_amount = new Tez(45)
 
 
-// it('Contract balance correctly updated by a bid', async () => {
+  it('Fails if bid is equal to current bid', async () => {
+    // 1. collector_two bids 10tz (make_offer).
+    await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_one_amount, as: collector_two})
 
-//     const contract_balance_before = await rrNFT.get_balance()
+    await expect_to_fail(async () => {
+    await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_one_amount, as: collector_three})
+    }, att.string_to_mich("\"your Bid must be higher than current bid\""))
+  })
 
-//     // Balance before is the first bid of 10tz less 10% creator royalty
-//     assert(contract_balance_before.equals(new Tez(9)))
+  it('Fails if bid is lower than current bid', async () => {
+    await expect_to_fail(async () => {
+    await rrNFT.makeOffer(marketplace_one.get_address(), {amount: new Tez(1), as: collector_three})
+    }, att.string_to_mich("\"your Bid must be higher than current bid\""))
+  })
+
+  it('Fails if owner attempts to bid', async () => {
+    await expect_to_fail(async () => {
+    await rrNFT.makeOffer(marketplace_one.get_address(), {amount: bid_two_amount, as: creator_one})
+    }, att.string_to_mich("\"The owner's address may not bid\""))
+  })
+
+
+it('Contract balance correctly updated by a bid', async () => {
+
+    const contract_balance_before = await rrNFT.get_balance()
+
+    // Balance before is the first bid of 10tz less 10% creator royalty
+    assert(contract_balance_before.equals(new Tez(9)))
     
-//     // 2. collector_three bids 20tz (make_offer)
-//     await rrNFT.makeOffer(marketplace_two.get_address(), {amount: bid_two_amount, as: collector_two})
+    // 2. collector_three bids 20tz (make_offer)
+    await rrNFT.makeOffer(marketplace_two.get_address(), {amount: bid_two_amount, as: collector_two})
     
-//     delay_mockup_now_by_minute(1)
+    delay_mockup_now_by_minute(10)
 
-//     const contract_balance_after = await rrNFT.get_balance()
-//     // Balance after is the second bid of 20tz less 10% creator royalty
-//     assert(contract_balance_after.equals(new Tez(18)))
+    const contract_balance_after = await rrNFT.get_balance()
+    // Balance after is the second bid of 20tz less 10% creator royalty
+    assert(contract_balance_after.equals(new Tez(18)))
   
-//   })
+  })
 
-// it('Tidemark variable correctly updated by a bid', async () => {
+it('Tidemark variable correctly updated by a bid', async () => {
 
-//     const tidemark_before = await rrNFT.get_tidemark()
-//     assert(tidemark_before.equals(new Tez(20)))
+    const tidemark_before = await rrNFT.get_tidemark()
+    assert(tidemark_before.equals(new Tez(20)))
 
-//     // 3. owner_one bids 45tz (make_offer)
-//     await rrNFT.makeOffer(marketplace_three.get_address(), {amount: bid_three_amount, as: owner_one})
+    // 3. owner_one bids 45tz (make_offer)
+    await rrNFT.makeOffer(marketplace_three.get_address(), {amount: bid_three_amount, as: owner_one})
 
-//     delay_mockup_now_by_minute(1)
-//     const tidemark_after  = await rrNFT.get_tidemark()
-//     assert(tidemark_after.equals(new Tez(45)))
+    delay_mockup_now_by_minute(1)
+    const tidemark_after  = await rrNFT.get_tidemark()
+    assert(tidemark_after.equals(new Tez(45)))
     
-//   })
+  })
+})
 
 
 //   //A function to take an integral under a curve between 0 and 1:
@@ -311,7 +313,7 @@ function logTezChange (contractName: string, before: Tez, after: Tez) {
   
 // })
   
-describe('[SELL] entrypoint', async () => {
+// describe('[SELL] entrypoint', async () => {
   
 //   it('Fails if called by bidder', async () => {
 //     await expect_to_fail(async () => {
@@ -338,21 +340,22 @@ describe('[SELL] entrypoint', async () => {
 //     })
     
 
-    it('integrate Test', async () => {
-      // await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.9), {})
-      await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.8), {})
-      const answer1 = await rrNFT.get_answer()
-      await rrNFT.integrateExpCurveTest(new Rational(0.8), new Rational(0.9), {})
-      const answer2 = await rrNFT.get_answer()
-      await rrNFT.integrateExpCurveTest(new Rational(0.9), new Rational(0.999999), {})
-      const answer3 = await rrNFT.get_answer()
-      console.log('combined', answer1.plus(answer2).plus(answer3).toString())
-      await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.999999), {})
-      const answer4 = await rrNFT.get_answer()
-      console.log('single', answer4.toString())
-    })
+  //   it('integrate Test', async () => {
+  //     // await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.9), {})
+  //     await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.8), {})
+  //     const answer1 = await rrNFT.get_answer()
+  //     await rrNFT.integrateExpCurveTest(new Rational(0.8), new Rational(0.9), {})
+  //     const answer2 = await rrNFT.get_answer()
+  //     await rrNFT.integrateExpCurveTest(new Rational(0.9), new Rational(0.999999), {})
+  //     const answer3 = await rrNFT.get_answer()
+  //     console.log('combined', answer1.plus(answer2).plus(answer3).toString())
+  //     await rrNFT.integrateExpCurveTest(new Rational(0), new Rational(0.999999), {})
+  //     const answer4 = await rrNFT.get_answer()
+  //     console.log('single', answer4.toString())
+  //   })
 
-  })
+  // })
+
   
 
 

@@ -19,7 +19,6 @@ with metadata ""
 
 
 //URL to the metatdata on IPFS or other goes in the quotes above//
-
 variable tidemarkAuctionDate : date = 1970-01-01
 variable owner : address = creator
 

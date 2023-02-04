@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@completium/archetype-ts-types": "latest",
-    "@completium/completium-cli": "latest",
+    "@completium/completium-cli": "^0.4.71",
     "@completium/experiment-ts": "^0.1.9",
     "bignumber": "^1.1.0",
     "bignumber.js": "^9.1.1"
