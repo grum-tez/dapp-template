@@ -1,0 +1,13 @@
+archetype rrNFT(
+creator: address,
+minter: address,
+royaltyRate: rational,
+minterRate: rational,
+marketRate: rational,
+auctionDuration : duration,
+gracePeriod: duration
+// const artworkMetaData: bytes
+)
+with metadata "" 
+
+

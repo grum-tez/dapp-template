@@ -1,4 +1,4 @@
-archetype fa2_nft(owner : address, permits : address) with metadata ""
+archetype tidemark_fa2(owner : address, permits : address) with metadata ""
 
 /* OWNERSHIP TRANSFER ------------------------------------------------------- */
 
@@ -117,19 +117,21 @@ record transfer_param {
 
 /* STORAGE ---------------------------------------------------------------- */
 
-asset ledger identified by ltokenid to big_map {
-  ltokenid   : nat;
-  lowner     : address;
-}
+enum sale_cycle_state =
+| tidemark_auction
+| english_auction
+| grace_period
+| unclaimed
 
-record part {
-  part_account : address;
-  part_value   : nat;
-}
+asset ledger identified by l_tokenid to big_map {
+  l_tokenid   : nat;
+  l_token_owner     : address;
+  l_tidemark: tez = 0tz;
+  l_creator_rate: rational;
+  l_marketplace_rate: rational;
+  l_minter_rate: rational;
+  l_sale_cycle_state: sale_cycle_state = tidemark_auction;
 
-asset royalties identified by rtokenid to big_map {
-  rtokenid : nat;
-  rvalue : list<part>;
 }
 
 asset operator identified by oaddr otoken oowner to big_map {
@@ -233,11 +235,11 @@ entry do_transfer(txs : list<transfer_param>) {
       const tds   = tx.tp_txs;
       for td in tds do begin
         const tokenid = td.token_id_dest;
-        const towner ?= ledger[tokenid]?.lowner : FA2_TOKEN_UNDEFINED;
+        const towner ?= ledger[tokenid]?.l_token_owner : FA2_TOKEN_UNDEFINED;
         if td.token_amount_dest > 0
         then begin
           do_require(towner = %from and td.token_amount_dest = 1, FA2_INSUFFICIENT_BALANCE);
-          ledger.update(tokenid, { lowner = td.to_dest })
+          ledger.update(tokenid, { l_token_owner = td.to_dest })
         end
       end done
     done
@@ -291,32 +293,33 @@ entry %transfer (txs : list<transfer_param>) {
     transfer 0tz to entry self.do_transfer(txs);
   }
 }
-/*--mint parameters 
-tow: token owner (address)
-tid: token id (nat)
-tmd: token metadata (map<string, bytes>)
 
+variable next_token_id : nat = 1
 
---*/
-
-entry mint (tow : address, tid : nat, tmd: map<string, bytes>, roy : list<part>) {
+entry mint (
+  first_owner : address, 
+  tmd: map<string, bytes>,
+  creator_rate : rational,
+  marketplace_rate : rational,
+  minter_rate : rational, 
+  ) {
   no transfer
   called by owner
   require { fa2_r5: is_not_paused() }
   effect {
-    ledger.add({ ltokenid = tid; lowner = tow });
-    token_metadata.add_update(tid, {
-      token_id   = tid;
+    ledger.add({ l_tokenid = next_token_id; l_token_owner = first_owner; l_creator_rate = creator_rate; l_marketplace_rate = marketplace_rate; l_minter_rate = minter_rate });
+    token_metadata.add_update(next_token_id, {
+      token_id   = next_token_id;
       token_info = tmd
     });
-    royalties.put({ rtokenid = tid; rvalue = roy });
+    next_token_id := next_token_id + 1
   }
 }
 
 entry burn(tid : nat) {
   no transfer
   constant {
-    token_owner ?is ledger[tid]?.lowner otherwise FA2_TOKEN_UNDEFINED;
+    token_owner ?is ledger[tid]?.l_token_owner otherwise FA2_TOKEN_UNDEFINED;
   }
   require {
     fa2_r6: is_not_paused();
@@ -325,7 +328,6 @@ entry burn(tid : nat) {
   effect {
     ledger.remove(tid);
     token_metadata.remove(tid);
-    royalties.remove(tid)
   }
 }
 
@@ -343,7 +345,7 @@ record balance_of_response {
 
 function get_balance(br : balance_of_request) : nat {
   const token ?= ledger[br.btoken_id] : FA2_TOKEN_UNDEFINED;
-  return (token.lowner = br.bo_owner ? 1 : 0)
+  return (token.l_token_owner = br.bo_owner ? 1 : 0)
 }
 
 getter balance_of (requests : list<balance_of_request>) : list<balance_of_response> {
@@ -355,9 +357,6 @@ getter balance_of (requests : list<balance_of_request>) : list<balance_of_respon
 
 /* VIEWS ------------------------------------------------------------------- */
 
-view get_royalties(tokenId : nat) : list<part> {
-  return (royalties[tokenId] ? the.rvalue : make_list<part>([]))
-}
 
 /* TZIP-017 One-step  ------------------------------------------------------ */
 

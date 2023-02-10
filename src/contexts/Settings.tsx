@@ -31,7 +31,7 @@ export const [
     const [settingState, setState] = useState({
       app_name        : 'Tidemark',
       endpoint        : 'https://ghostnet.ecadinfra.com',
-      contract        : 'KT1U9Yt1MQNUMoWtcAPsJM8h6LPhUu7HtMQB',
+      contract        : 'KT1Qz8BNCoTHg1qWcJPG1p5QSGzSoYgKt9mM',
       ipfs_browser    : 'https://gateway.pinata.cloud/ipfs/',
       network         :  NetworkType.GHOSTNET,
       theme           :  Theme.Default,

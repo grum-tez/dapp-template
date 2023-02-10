@@ -1,0 +1,10 @@
+{
+  "name": "Test fa2 contract",
+  "description": "Test fa2 contract",
+  "interfaces": [
+    "TZIP-012",
+    "TZIP-016",
+    "TZIP-017"
+  ],
+  "tokenCategory": "collectibles"
+}

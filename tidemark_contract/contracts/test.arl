@@ -1,9 +1,7 @@
-archetype simple(par : nat)
+archetype simple
 
-variable res : nat = 0
-variable ser: nat = 1
+variable stringOne : address = tz1N4CJxuNpyuySnemPTVvF6qH52DWtUTzc4
 
-entry exec (n : nat) {
-  res := n;
-  ser := par
+entry exec (n : address) {
+  stringOne := tz1N4CJxuNpyuySnemPTVvF6qH52DWtUTzc4;
 }

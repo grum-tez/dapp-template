@@ -9,17 +9,17 @@ import { TaquitoProvider } from './contexts/Taquito';
 import { BeaconProvider } from './contexts/Beacon';
 import { ContractProvider } from './contexts/Contract';
 
-import { BasicInfo } from './routes/BasicPage';
+// import { BasicInfo } from './routes/BasicPage';
 import { MintPage } from './routes/MintPage';
 
 import './App.css';
 import { StrictMode } from 'react';
 
 const router = createBrowserRouter([
-  {
-    path: "/basic",
-    element: <BasicInfo />,
-  },
+  // {
+  //   path: "/basic",
+  //   element: <BasicInfo />,
+  // },
   {
     path: "/mint",
     element: <MintPage />,

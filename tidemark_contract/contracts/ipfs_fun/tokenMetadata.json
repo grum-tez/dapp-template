@@ -1,0 +1,32 @@
+{
+  name: 'A sample NFT',
+  description: 'What a cool sample NFT this is',
+  creators: ['grum'],
+  formats: [
+    {
+      uri: 'ipfs://QmWfcpAbr41781sX4A4Vtd42aqxCvkS2m5QtnSBMKk4h1A',
+      mimeType: 'image/png',
+      dimensions: { value: '822x662', unit: 'px' },
+    },
+    {
+      uri: 'ipfs://QmWfcpAbr41781sX4A4Vtd42aqxCvkS2m5QtnSBMKk4h1A',
+      mimeType: 'image/png',
+      dimensions: { value: '822x662', unit: 'px' },
+    },
+    {
+      uri: 'ipfs://QmWFhP7B6V6FdPFhKvq2dtDY28moojet3HyXytaVya4PSn',
+      mimeType: 'image/png',
+      dimensions: { value: '640x640', unit: 'px' },
+    },
+  ],
+  contributors: ['grum'],
+  artifactUri: 'ipfs://QmWfcpAbr41781sX4A4Vtd42aqxCvkS2m5QtnSBMKk4h1A',
+  displayUri: 'ipfs://QmWfcpAbr41781sX4A4Vtd42aqxCvkS2m5QtnSBMKk4h1A',
+  thumbnailUri: 'ipfs://QmWFhP7B6V6FdPFhKvq2dtDY28moojet3HyXytaVya4PSn',
+  decimals: 0,
+  attributes: [{ name: 'Rarity', value: 'Rare' }],
+  royalties: {
+    decimals: 2,
+    shares: { tz1S7FjNG1mZ6YkejPaAJMckW95ZyzkzjKSr: '5' },
+  },
+}

@@ -5,6 +5,9 @@ import { useConnect, useIsConnected, useDisconnect, useWalletAddress, useWalletN
 import { Wallet } from "@taquito/taquito";
 import { useTezosToolkit } from "../contexts/Taquito";
 import { useState } from "react";
+import { useContract } from "../contexts/Contract";
+import { Address, Bytes, Tez, Nat,} from "@completium/archetype-ts-types";
+import { part } from "../bindings/fa2_nft"
 
 interface fa2_params {
   owner : undefined | string,
@@ -42,23 +45,33 @@ const LoginButton = () => {
 const DeployContractButton = () => {
   const deployContract = useDeployContract()
   const walletAddress = useWalletAddress()
-return (
-  <button onClick={() => {
+    return (
+      <button onClick={() => {
+        console.log('click!')
+        const parameters : fa2_params = {
+          owner : walletAddress?.toString(),
+          permits: walletAddress?.toString()
+          }
+        deployContract(parameters)
+    }}>Deploy</button>
+  )
+}
+
+const MintButton = () => {
+
+  const handleMint = () => {
     console.log('click!')
-    const parameters : fa2_params = {
-      owner : walletAddress?.toString(),
-      permits: walletAddress?.toString()
+    const byteInput : Bytes = Bytes.hex_encode("ipfs://bafybeigzpfsrvvb3ifrfe4tmahmenuf3flbyhi5y4v6g4fn6pqpiqd4wwy")
+    contract.mint(new Address('tz1S7FjNG1mZ6YkejPaAJMckW95ZyzkzjKSr'), new Nat(2), [["My Token!!", byteInput]], [new part(new Address("tz1S7FjNG1mZ6YkejPaAJMckW95ZyzkzjKSr"), new Nat(1))], {})
   }
-    deployContract(parameters)
-}}>Deploy</button>
-)
 
-
+  const contract = useContract();
+  return (
+    <button onClick={handleMint}
+    >Mint</button>
+  )
 }
 export const MintPage = () => {
-  
-
-
   
 
   return (
@@ -67,6 +80,7 @@ export const MintPage = () => {
       <ConnectedTag />
       <LoginButton />
       <DeployContractButton />
+      <MintButton />
     </div>
   );
 }

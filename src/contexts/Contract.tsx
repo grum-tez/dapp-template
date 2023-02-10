@@ -2,7 +2,7 @@ import { set_binder_tezos_toolkit } from '@completium/dapp-ts';
 import constate from 'constate';
 import { useState } from 'react';
 
-import { RrNFT as Contract } from '../bindings/rrNFT'; // replace FIXME
+import { Fa2_nft as Contract } from '../bindings/fa2_nft'; // replace FIXME
 import { useContractAddress } from './Settings';
 import { useTezosToolkit } from './Taquito';
 

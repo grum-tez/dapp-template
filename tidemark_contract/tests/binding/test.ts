@@ -1,9 +1,9 @@
 import * as ex from "@completium/experiment-ts";
 import * as att from "@completium/archetype-ts-types";
-const input_arg_to_mich = (name: string): att.Micheline => {
-    return att.string_to_mich(name);
+const exec_arg_to_mich = (n: att.Address): att.Micheline => {
+    return n.to_mich();
 }
-export class Test {
+export class Simple {
     address: string | undefined;
     constructor(address: string | undefined = undefined) {
         this.address = address;
@@ -21,28 +21,28 @@ export class Test {
         throw new Error("Contract not initialised");
     }
     async deploy(params: Partial<ex.Parameters>) {
-        const address = (await ex.deploy("./contracts/test.arl", {}, params)).address;
+        const address = (await ex.deploy("./contracts/simple.arl", {}, params)).address;
         this.address = address;
     }
-    async input(name: string, params: Partial<ex.Parameters>): Promise<att.CallResult> {
+    async exec(n: att.Address, params: Partial<ex.Parameters>): Promise<att.CallResult> {
         if (this.address != undefined) {
-            return await ex.call(this.address, "input", input_arg_to_mich(name), params);
+            return await ex.call(this.address, "exec", exec_arg_to_mich(n), params);
         }
         throw new Error("Contract not initialised");
     }
-    async get_input_param(name: string, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
+    async get_exec_param(n: att.Address, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
         if (this.address != undefined) {
-            return await ex.get_call_param(this.address, "input", input_arg_to_mich(name), params);
+            return await ex.get_call_param(this.address, "exec", exec_arg_to_mich(n), params);
         }
         throw new Error("Contract not initialised");
     }
-    async get_msg(): Promise<string> {
+    async get_stringOne(): Promise<att.Address> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_string(storage);
+            return att.Address.from_mich(storage);
         }
         throw new Error("Contract not initialised");
     }
     errors = {};
 }
-export const test = new Test();
+export const simple = new Simple();
