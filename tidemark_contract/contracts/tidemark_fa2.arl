@@ -1,8 +1,9 @@
-archetype tidemark_fa2(owner : address, permits : address) with metadata ""
+archetype tidemark_fa2(owner : address, permits : address, minter : address) with metadata ""
 
 /* OWNERSHIP TRANSFER ------------------------------------------------------- */
 
 variable owner_candidate : option<address> = none
+variable null_address: address = KT18amZmM5W7qDWVt2pH6uj7sCEd3kbzLrHT
 
 entry declare_ownership(candidate : address) {
   no transfer
@@ -123,14 +124,37 @@ enum sale_cycle_state =
 | grace_period
 | unclaimed
 
-asset ledger identified by l_tokenid to big_map {
-  l_tokenid   : nat;
+variable tidemark : tez = 0tz
+
+asset ledger identified by l_token_id to big_map {
+  l_token_id   : nat;
+  l_token_creator : address;
   l_token_owner     : address;
   l_tidemark: tez = 0tz;
   l_creator_rate: rational;
   l_marketplace_rate: rational;
   l_minter_rate: rational;
   l_sale_cycle_state: sale_cycle_state = tidemark_auction;
+  l_bid_count : nat = 0;
+  //bid record inputs:
+  l_bid: tez = 0tz;
+  l_bidder: address = null_address;
+  l_marketplace: address = null_address;
+  l_tidemark_duration: duration = 1w;
+  l_grace_period_duration: duration = 1d;
+
+}
+
+record bid_record {
+  br_bid: tez;
+  br_bidder: address;
+  br_marketplace: address;
+}
+
+asset bid_history identified by bh_asset_id {
+  bh_asset_id : nat;
+  bh_token_id: nat;
+  bh_bid_records: list<bid_record> = []
 
 }
 
@@ -301,13 +325,30 @@ entry mint (
   tmd: map<string, bytes>,
   creator_rate : rational,
   marketplace_rate : rational,
-  minter_rate : rational, 
+  minter_rate : rational,
+  token_creator : address
+  //add tidemark duration
+  //add grace period
   ) {
   no transfer
   called by owner
   require { fa2_r5: is_not_paused() }
   effect {
-    ledger.add({ l_tokenid = next_token_id; l_token_owner = first_owner; l_creator_rate = creator_rate; l_marketplace_rate = marketplace_rate; l_minter_rate = minter_rate });
+
+    ledger.add({ 
+      l_token_id = next_token_id; 
+      l_token_owner = first_owner;
+      l_creator_rate = creator_rate; 
+      l_marketplace_rate = marketplace_rate;
+      l_minter_rate = minter_rate;
+      l_token_creator = token_creator
+      });
+    
+    bid_history.add({
+       bh_asset_id = next_token_id;
+       bh_token_id = next_token_id
+        });
+
     token_metadata.add_update(next_token_id, {
       token_id   = next_token_id;
       token_info = tmd
@@ -330,6 +371,55 @@ entry burn(tid : nat) {
     token_metadata.remove(tid);
   }
 }
+ 
+entry make_offer(
+  mo_token_id : nat,
+  mo_marketplace: address,
+  mo_bid: tez,
+  ) {
+    require {
+      tm_r1: mo_bid = transferred otherwise "bid did not equal transferred";
+      tm_r2: mo_bid > 0tz otherwise "bid must be greater than 0";
+      tm_r3: mo_bid > ledger[mo_token_id].l_bid otherwise "incoming bid must be greater than current bid";
+      tm_r4: ledger[mo_token_id].l_token_owner <> caller otherwise "cannot make offer on your own token";
+     // tm_r5: Auction must not have concluded
+     // tm_r6: mo_marketplace must hold a marketplace token
+     // tm_r6: 
+     } 
+
+     effect {
+
+      const last_bid = ledger[mo_token_id].l_bid;
+      const last_bidder = ledger[mo_token_id].l_bidder;
+      const last_marketplace = ledger[mo_token_id].l_marketplace;
+      const creator_rate = ledger[mo_token_id].l_creator_rate;
+      const minter_rate = ledger[mo_token_id].l_minter_rate;
+      //If there was a past bid...
+      if last_bid > 0tz then begin
+        //...pay back the last bidder...
+        transfer last_bid to last_bidder;
+        //...and add the bid to the bid history.
+        bid_history[mo_token_id].bh_bid_records.prepend({
+          br_bid = last_bid;
+          br_bidder = last_bidder;
+          br_marketplace = last_marketplace
+        });
+      end;
+    //if the tidemark has been passed, then fees are due the creator and minter
+    if (transferred > tidemark) then begin
+      tidemark := transferred;
+      const increase = mo_bid - last_bid;
+      const creator_fee = creator_rate * increase;
+      const minter_fee = minter_rate * increase;
+      transfer creator_fee to ledger[mo_token_id].l_token_creator;
+      transfer minter_fee to minter;
+    end;
+    // Update the token's bid and bidder
+    ledger[mo_token_id].l_bid := mo_bid;
+    ledger[mo_token_id].l_bidder := caller;
+    ledger[mo_token_id].l_marketplace := mo_marketplace;
+     }
+  }
 
 /* GETTERS ----------------------------------------------------------------- */
 
@@ -342,7 +432,7 @@ record balance_of_response {
   request : balance_of_request;
   balance_ : nat;
 } as ((request, balance))
-
+ 
 function get_balance(br : balance_of_request) : nat {
   const token ?= ledger[br.btoken_id] : FA2_TOKEN_UNDEFINED;
   return (token.l_token_owner = br.bo_owner ? 1 : 0)

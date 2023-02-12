@@ -63,7 +63,7 @@ const valAsString =
 
 const varNameToString = (varObj: any) => Object.keys(varObj)[0]
 
-export const assetToPreTable = (asset: object | undefined) : PreTable => {
+const assetToPreTable = (asset: object | undefined) : PreTable => {
 
 if (asset === undefined) { 
   console.log ("the asset is undefined and cannot be printed"); 
