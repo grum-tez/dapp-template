@@ -151,10 +151,16 @@ record bid_record {
   br_marketplace: address;
 }
 
+constant bid_record_init : bid_record = {
+  br_bid = 0tz;
+  br_bidder = null_address;
+  br_marketplace = null_address
+}
+
 asset bid_history identified by bh_asset_id {
   bh_asset_id : nat;
   bh_token_id: nat;
-  bh_bid_records: list<bid_record> = []
+  bh_bid_records: map<nat,bid_record> = [(0,  bid_record_init)];
 
 }
 
@@ -384,42 +390,88 @@ entry make_offer(
       tm_r4: ledger[mo_token_id].l_token_owner <> caller otherwise "cannot make offer on your own token";
      // tm_r5: Auction must not have concluded
      // tm_r6: mo_marketplace must hold a marketplace token
-     // tm_r6: 
+       tm_r7: is_not_paused();
      } 
 
      effect {
+      const bid_records = bid_history[mo_token_id].bh_bid_records;
+      const bid_count: nat = length(bid_records);
 
-      const last_bid = ledger[mo_token_id].l_bid;
-      const last_bidder = ledger[mo_token_id].l_bidder;
-      const last_marketplace = ledger[mo_token_id].l_marketplace;
+
+      const last_bid_id ?= int_to_nat(mo_token_id -1);
+      const tbr_option = bid_history[mo_token_id].bh_bid_records[last_bid_id];
+      const last_tbr ?= tbr_option;
+      const last_bid = last_tbr.br_bid;
+      const last_bidder = last_tbr.br_bidder;
       const creator_rate = ledger[mo_token_id].l_creator_rate;
       const minter_rate = ledger[mo_token_id].l_minter_rate;
       //If there was a past bid...
       if last_bid > 0tz then begin
         //...pay back the last bidder...
         transfer last_bid to last_bidder;
-        //...and add the bid to the bid history.
-        bid_history[mo_token_id].bh_bid_records.prepend({
-          br_bid = last_bid;
-          br_bidder = last_bidder;
-          br_marketplace = last_marketplace
-        });
       end;
-    //if the tidemark has been passed, then fees are due the creator and minter
+    //if the tidemark has been passed, then update the tidemark...
     if (transferred > tidemark) then begin
       tidemark := transferred;
       const increase = mo_bid - last_bid;
       const creator_fee = creator_rate * increase;
       const minter_fee = minter_rate * increase;
+      //...and pay the creator and minter their fees.
       transfer creator_fee to ledger[mo_token_id].l_token_creator;
       transfer minter_fee to minter;
     end;
-    // Update the token's bid and bidder
-    ledger[mo_token_id].l_bid := mo_bid;
-    ledger[mo_token_id].l_bidder := caller;
-    ledger[mo_token_id].l_marketplace := mo_marketplace;
-     }
+    // Add current bid to bid History
+
+    const current_bid_record : bid_record = {
+      br_bid = mo_bid;
+      br_bidder = caller;
+      br_marketplace = mo_marketplace
+};
+
+    bid_history[mo_token_id].bh_bid_records.update( bid_count, some(current_bid_record));
+    
+    }
   }
+
+// entry sell(s_token_id : nat) {
+//   require {
+//     tm_r8: caller = owner or caller = self_address otherwise "only owner or the contract itself may call the sell entrypoint";
+//   } 
+//   effect {
+    
+//     const last_bid = ledger[s_token_id].l_bid;
+//     const last_bidder = ledger[s_token_id].l_bidder;
+//     const last_marketplace = ledger[s_token_id].l_marketplace;
+//     const marketplace_rate = ledger[s_token_id].l_marketplace_rate;
+//     const marketplace_fee = marketplace_rate * last_bid;
+
+//     //Add current bid to history: 
+//     //Note this code is repeated in make_offer()
+
+//     bid_history[s_token_id].bh_bid_records.prepend({
+//           br_bid = last_bid;
+//           br_bidder = last_bidder;
+//           br_marketplace = last_marketplace
+//         });
+
+//     const splitList = evenSplit(bid_history[s_token_id].bh_bid_records);
+
+//     for br in bid_history[s_token_id].bh_bid_records do
+//       fail(("br: "))
+//       // transfer (0.2*marketplace_fee) to br_marketplace
+//     done;
+      
+
+//   }
+
+// }
+
+//This evenSplit function needs to be replaced with the exponential split
+function evenSplit(bids : list<bid_record>) : list<tez> {
+  const len = length(bids);
+  const split = (1 / len)*1tz;
+  return map(bids, br -> split)
+}
 
 /* GETTERS ----------------------------------------------------------------- */
 
