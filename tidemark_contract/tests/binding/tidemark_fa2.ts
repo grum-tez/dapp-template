@@ -366,18 +366,18 @@ export class token_metadata_value implements att.ArchetypeType {
     }
 }
 export class ledger_value implements att.ArchetypeType {
-    constructor(public l_token_creator: att.Address, public l_token_owner: att.Address, public l_tidemark: att.Tez, public l_creator_rate: att.Rational, public l_marketplace_rate: att.Rational, public l_minter_rate: att.Rational, public l_sale_cycle_state: sale_cycle_state, public l_bid_count: att.Nat, public l_bid: att.Tez, public l_bidder: att.Address, public l_marketplace: att.Address, public l_tidemark_duration: att.Duration, public l_grace_period_duration: att.Duration) { }
+    constructor(public l_token_creator: att.Address, public l_token_owner: att.Address, public l_tidemark: att.Tez, public l_creator_rate: att.Rational, public l_marketplace_rate: att.Rational, public l_minter_rate: att.Rational, public l_sale_cycle_state: sale_cycle_state, public l_tidemark_duration: att.Duration, public l_grace_period_duration: att.Duration) { }
     toString(): string {
         return JSON.stringify(this, null, 2);
     }
     to_mich(): att.Micheline {
-        return att.pair_to_mich([this.l_token_creator.to_mich(), this.l_token_owner.to_mich(), this.l_tidemark.to_mich(), this.l_creator_rate.to_mich(), this.l_marketplace_rate.to_mich(), this.l_minter_rate.to_mich(), this.l_sale_cycle_state.to_mich(), this.l_bid_count.to_mich(), this.l_bid.to_mich(), this.l_bidder.to_mich(), this.l_marketplace.to_mich(), this.l_tidemark_duration.to_mich(), this.l_grace_period_duration.to_mich()]);
+        return att.pair_to_mich([this.l_token_creator.to_mich(), this.l_token_owner.to_mich(), this.l_tidemark.to_mich(), this.l_creator_rate.to_mich(), this.l_marketplace_rate.to_mich(), this.l_minter_rate.to_mich(), this.l_sale_cycle_state.to_mich(), this.l_tidemark_duration.to_mich(), this.l_grace_period_duration.to_mich()]);
     }
     equals(v: ledger_value): boolean {
         return att.micheline_equals(this.to_mich(), v.to_mich());
     }
     static from_mich(input: att.Micheline): ledger_value {
-        return new ledger_value(att.Address.from_mich((input as att.Mpair).args[0]), att.Address.from_mich((input as att.Mpair).args[1]), att.Tez.from_mich((input as att.Mpair).args[2]), att.Rational.from_mich((input as att.Mpair).args[3]), att.Rational.from_mich((input as att.Mpair).args[4]), att.Rational.from_mich((input as att.Mpair).args[5]), mich_to_sale_cycle_state((input as att.Mpair).args[6]), att.Nat.from_mich((input as att.Mpair).args[7]), att.Tez.from_mich((input as att.Mpair).args[8]), att.Address.from_mich((input as att.Mpair).args[9]), att.Address.from_mich((input as att.Mpair).args[10]), att.Duration.from_mich((input as att.Mpair).args[11]), att.Duration.from_mich((input as att.Mpair).args[12]));
+        return new ledger_value(att.Address.from_mich((input as att.Mpair).args[0]), att.Address.from_mich((input as att.Mpair).args[1]), att.Tez.from_mich((input as att.Mpair).args[2]), att.Rational.from_mich((input as att.Mpair).args[3]), att.Rational.from_mich((input as att.Mpair).args[4]), att.Rational.from_mich((input as att.Mpair).args[5]), mich_to_sale_cycle_state((input as att.Mpair).args[6]), att.Duration.from_mich((input as att.Mpair).args[7]), att.Duration.from_mich((input as att.Mpair).args[8]));
     }
 }
 export class bid_history_value implements att.ArchetypeType {
@@ -453,10 +453,6 @@ export const ledger_value_mich_type: att.MichelineType = att.pair_array_to_mich_
         att.prim_annot_to_mich_type("nat", [])
     ], ["%l_minter_rate"]),
     att.prim_annot_to_mich_type("int", ["%l_sale_cycle_state"]),
-    att.prim_annot_to_mich_type("nat", ["%l_bid_count"]),
-    att.prim_annot_to_mich_type("mutez", ["%l_bid"]),
-    att.prim_annot_to_mich_type("address", ["%l_bidder"]),
-    att.prim_annot_to_mich_type("address", ["%l_marketplace"]),
     att.prim_annot_to_mich_type("int", ["%l_tidemark_duration"]),
     att.prim_annot_to_mich_type("int", ["%l_grace_period_duration"])
 ], []);
@@ -511,10 +507,6 @@ export const ledger_container_mich_type: att.MichelineType = att.pair_annot_to_m
         att.prim_annot_to_mich_type("nat", [])
     ], ["%l_minter_rate"]),
     att.prim_annot_to_mich_type("int", ["%l_sale_cycle_state"]),
-    att.prim_annot_to_mich_type("nat", ["%l_bid_count"]),
-    att.prim_annot_to_mich_type("mutez", ["%l_bid"]),
-    att.prim_annot_to_mich_type("address", ["%l_bidder"]),
-    att.prim_annot_to_mich_type("address", ["%l_marketplace"]),
     att.prim_annot_to_mich_type("int", ["%l_tidemark_duration"]),
     att.prim_annot_to_mich_type("int", ["%l_grace_period_duration"])
 ], []), []);
@@ -622,6 +614,9 @@ const make_offer_arg_to_mich = (mo_token_id: att.Nat, mo_marketplace: att.Addres
         mo_marketplace.to_mich(),
         mo_bid.to_mich()
     ]);
+}
+const sell_arg_to_mich = (s_token_id: att.Nat): att.Micheline => {
+    return s_token_id.to_mich();
 }
 const permit_transfer_arg_to_mich = (txs: Array<transfer_param>, permit: att.Option<[
     att.Key,
@@ -771,6 +766,12 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
+    async sell(s_token_id: att.Nat, params: Partial<ex.Parameters>): Promise<att.CallResult> {
+        if (this.address != undefined) {
+            return await ex.call(this.address, "sell", sell_arg_to_mich(s_token_id), params);
+        }
+        throw new Error("Contract not initialised");
+    }
     async permit_transfer(txs: Array<transfer_param>, permit: att.Option<[
         att.Key,
         att.Signature
@@ -873,6 +874,12 @@ export class Tidemark_fa2 {
     async get_make_offer_param(mo_token_id: att.Nat, mo_marketplace: att.Address, mo_bid: att.Tez, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
         if (this.address != undefined) {
             return await ex.get_call_param(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace, mo_bid), params);
+        }
+        throw new Error("Contract not initialised");
+    }
+    async get_sell_param(s_token_id: att.Nat, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
+        if (this.address != undefined) {
+            return await ex.get_call_param(this.address, "sell", sell_arg_to_mich(s_token_id), params);
         }
         throw new Error("Contract not initialised");
     }
@@ -1093,9 +1100,10 @@ export class Tidemark_fa2 {
         fa2_r9: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"fa2_r9\"")]),
         NO_TRANSFER: att.string_to_mich("\"NO_TRANSFER\""),
         OPTION_IS_NONE: att.string_to_mich("\"OPTION_IS_NONE\""),
-        tm_r7: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"tm_r7\"")]),
-        tm_r4: att.string_to_mich("\"cannot make offer on your own token\""),
-        tm_r3: att.string_to_mich("\"incoming bid must be greater than current bid\""),
+        tm_r7: att.string_to_mich("\"only owner or the contract itself may call the sell entrypoint\""),
+        INCOMING_BID_MUST_BE_GREATER_THAN_CURRENT_BID: att.string_to_mich("\"incoming bid must be greater than current bid\""),
+        tm_r6: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"tm_r6\"")]),
+        tm_r3: att.string_to_mich("\"cannot make offer on your own token\""),
         tm_r2: att.string_to_mich("\"bid must be greater than 0\""),
         tm_r1: att.string_to_mich("\"bid did not equal transferred\""),
         fa2_r7: att.string_to_mich("\"FA2_NOT_OWNER\""),
