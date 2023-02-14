@@ -1,4 +1,4 @@
-archetype tidemark_fa2(owner : address, permits : address, minter : address) with metadata ""
+archetype tidemark_fa2(contract_owner : address, permits : address, minter : address) with metadata ""
 
 /* OWNERSHIP TRANSFER ------------------------------------------------------- */
 
@@ -7,7 +7,7 @@ variable null_address: address = KT18amZmM5W7qDWVt2pH6uj7sCEd3kbzLrHT
 
 entry declare_ownership(candidate : address) {
   no transfer
-  called by owner
+  called by contract_owner
   effect {
     owner_candidate := some(candidate);
   }
@@ -19,7 +19,7 @@ entry claim_ownership() {
     ownership_r1: (owner_candidate ? the = caller : false) otherwise "INVALID_CALLER"
   }
   effect {
-    owner := caller;
+    contract_owner := caller;
     owner_candidate := none
   }
 }
@@ -35,7 +35,7 @@ function is_not_paused() : bool {
 
 entry pause() {
   no transfer
-  called by owner
+  called by contract_owner
   require {
     pausable_r1: is_not_paused()
   }
@@ -46,7 +46,7 @@ entry pause() {
 
 entry unpause() {
   no transfer
-  called by owner
+  called by contract_owner
   require {
     pausable_r2: paused otherwise "CONTRACT_NOT_PAUSED"
   }
@@ -59,7 +59,7 @@ entry unpause() {
 
 entry set_metadata(k: string, d : option<bytes>) {
   no transfer
-  called by owner
+  called by contract_owner
   require { md_r1 : is_not_paused() }
   effect {
     metadata.update(k, d)
@@ -76,7 +76,7 @@ asset token_metadata to big_map {
 
 entry set_token_metadata (tid : nat, tdata: map<string, bytes>) {
   no transfer
-  called by owner
+  called by contract_owner
   require { tmd_r1: is_not_paused() }
   effect {
     token_metadata.add_update(tid, { token_id = tid; token_info = tdata });
@@ -87,7 +87,7 @@ entry set_token_metadata (tid : nat, tdata: map<string, bytes>) {
 
 entry set_permits(p : address) {
   no transfer
-  called by owner
+  called by contract_owner
   require { p_r1 : is_not_paused() }
   effect {
     permits := p
@@ -130,6 +130,7 @@ asset ledger identified by l_token_id to big_map {
   l_token_id   : nat;
   l_token_creator : address;
   l_token_owner     : address;
+  l_token_balance : tez = 0tz;
   l_tidemark: tez = 0tz;
   l_creator_rate: rational;
   l_marketplace_rate: rational;
@@ -155,8 +156,26 @@ constant bid_record_init : bid_record = {
 asset bid_history identified by bh_asset_id {
   bh_asset_id : nat;
   bh_token_id: nat;
-  bh_bid_records: map<nat,bid_record> = [(0,  bid_record_init)];
+  bh_bid_number: nat;
+  bh_bid_records: map<nat,bid_record> = [(0, bid_record_init)];
 
+}
+
+record oh_record {
+  ohr_date_purchased: date;
+  ohr_owner: address;
+  ohr_purchase_price: tez;
+  ohr_time_held: duration;
+  ohr_burden_paid: tez;
+  ohr_is_contract: bool;
+  ohr_is_creator: bool;
+}
+
+asset ownership_history {
+  oh_asset_id: nat;
+  oh_token_id: nat;
+  oh_owner_number: nat;
+  oh_oh_records: map<nat, oh_record>
 }
 
 asset operator identified by oaddr otoken oowner to big_map {
@@ -209,7 +228,7 @@ record operator_param {
   opp_owner    : address;
   opp_operator : address;
   opp_token_id : nat
-} as ((owner, (operator, token_id)))
+} as ((contract_owner, (operator, token_id)))
 
 enum update_op =
 | add_operator<operator_param>
@@ -322,38 +341,57 @@ entry %transfer (txs : list<transfer_param>) {
 variable next_token_id : nat = 1
 
 entry mint (
-  first_owner : address, 
   tmd: map<string, bytes>,
   creator_rate : rational,
   marketplace_rate : rational,
-  minter_rate : rational,
-  token_creator : address
+  minter_rate : rational
   //add tidemark duration
   //add grace period
   ) {
   no transfer
-  called by owner
+  called by contract_owner
   require { fa2_r5: is_not_paused() }
   effect {
 
     ledger.add({ 
       l_token_id = next_token_id; 
-      l_token_owner = first_owner;
+      l_token_owner = caller;
       l_creator_rate = creator_rate; 
       l_marketplace_rate = marketplace_rate;
       l_minter_rate = minter_rate;
-      l_token_creator = token_creator
+      l_token_creator = caller
       });
     
     bid_history.add({
        bh_asset_id = next_token_id;
-       bh_token_id = next_token_id
+       bh_token_id = next_token_id;
+       bh_bid_number = 0
         });
 
     token_metadata.add_update(next_token_id, {
       token_id   = next_token_id;
       token_info = tmd
-    });
+        });
+
+    const oh_record_init : oh_record = {
+      ohr_date_purchased = now;
+      ohr_owner = caller;
+      ohr_purchase_price = 0tz;
+      ohr_time_held = 0s;
+      ohr_burden_paid = 0tz;
+      ohr_is_contract = isAddressContract(caller);
+      ohr_is_creator = true
+
+    };
+
+    ownership_history.add({
+      oh_asset_id = next_token_id;
+      oh_token_id = next_token_id;
+      oh_owner_number = 0;
+      oh_oh_records = [(0, oh_record_init)]
+      });
+
+    //     });
     next_token_id := next_token_id + 1
   }
 }
@@ -389,9 +427,8 @@ entry make_offer(
 
      effect {
       const bid_records = bid_history[mo_token_id].bh_bid_records;
-      const bid_count: nat = length(bid_records);
-      const last_bid_id ?= int_to_nat(bid_count-1);
-      const last_br_option = bid_history[mo_token_id].bh_bid_records[last_bid_id];
+      const last_bid_number: nat = bid_history[mo_token_id].bh_bid_number;
+      const last_br_option = bid_records[last_bid_number];
       const last_br ?= last_br_option;
       const last_bid = last_br.br_bid;
       const last_bidder = last_br.br_bidder;
@@ -400,11 +437,19 @@ entry make_offer(
 
       do_require(mo_bid > last_bid, "incoming bid must be greater than current bid");
       
+    //track the token balance locally...
+     var mo_token_balance_tracker = ledger[mo_token_id].l_token_balance;
+      mo_token_balance_tracker += mo_bid;
+
+
       //If there was a past bid...
       if last_bid > 0tz then begin
         //...pay back the last bidder...
         transfer last_bid to last_bidder;
+        //...and update the token balance locally.
+        mo_token_balance_tracker -= last_bid;
       end;
+
     //if the tidemark has been passed, then update the tidemark...
     if (transferred > tidemark) then begin
       tidemark := transferred;
@@ -413,58 +458,149 @@ entry make_offer(
       const minter_fee = minter_rate * increase;
       //...and pay the creator and minter their fees.
       transfer creator_fee to ledger[mo_token_id].l_token_creator;
+      mo_token_balance_tracker -= creator_fee;
       transfer minter_fee to minter;
+      mo_token_balance_tracker -= minter_fee;
     end;
-    // Add current bid to bid History
 
+    //update the bid number locally
+    const this_bid_number: nat = last_bid_number + 1;
+    //update the bid number in storage
+    bid_history[mo_token_id].bh_bid_number := this_bid_number;
+    // Create local variable for current bid record
     const current_bid_record : bid_record = {
       br_bid = mo_bid;
       br_bidder = caller;
       br_marketplace = mo_marketplace
 };
-
-    bid_history[mo_token_id].bh_bid_records.update( bid_count, some(current_bid_record));
+    // Add current bid to bid History
+    // TODO need a function for deleting bid records when they exceed a certain number, eg 20.
+    bid_history[mo_token_id].bh_bid_records.update( this_bid_number, some(current_bid_record));
     
+    //update the token balance in storage
+    ledger[mo_token_id].l_token_balance := mo_token_balance_tracker;
     }
   }
 
+
 entry sell(s_token_id : nat) {
-  require {
-    tm_r7: caller = owner or caller = self_address otherwise "only owner or the contract itself may call the sell entrypoint";
-  } 
   effect {
       const bid_records = bid_history[s_token_id].bh_bid_records;
-      const bid_count: nat = length(bid_records);
-      const last_bid_id ?= int_to_nat(bid_count-1);
-      const last_br_option = bid_history[s_token_id].bh_bid_records[last_bid_id];
+      const winning_bid_number = bid_history[s_token_id].bh_bid_number;
+      const last_br_option = bid_history[s_token_id].bh_bid_records[winning_bid_number];
       const last_br ?= last_br_option;
-      const last_bid = last_br.br_bid;
-      const last_bidder = last_br.br_bidder;
-      const last_marketplace = last_br.br_marketplace;
+      const winning_bid = last_br.br_bid;
+      const winning_bidder = last_br.br_bidder;
       const marketplace_rate = ledger[s_token_id].l_marketplace_rate;
-      const marketplace_fee = marketplace_rate * last_bid;
+      const marketplace_fee = marketplace_rate * winning_bid;
+      const token_creator = ledger[s_token_id].l_token_creator;
+      const token_owner = ledger[s_token_id].l_token_owner;
+
+      //REQUIREMENTS:
+      do_require(winning_bid_number > 0, "no bids have been made on this token");
+      do_require(caller = token_owner or caller = self_address, "only owner or the contract itself may call the sell entrypoint");
 
 
+      //track the token balance locally...
+      var s_token_balance_tracker = ledger[s_token_id].l_token_balance; 
 
+      // Calculate what each marketplace is due
+      // TODO: Update this to use exponential split with global constant
+      const splitMap: map<nat, tez> = evenSplit(marketplace_fee, bid_records);
 
-    // const splitList = evenSplit(bid_records);
+      // Pay each marketplace their share
+      for (n, br) in bid_records do
+        // The first bid is a dummy bid with a bid of 0 and a marketplace of null_address.
+        // Attempt to pay to this address will fail with an ENTRY_NOT_FOUND error, so we skip it.
+        if n <> 0 then begin
+        const split ?= splitMap[n] : "DEV_ERR: const split ?= splitMap[n]";
+        transfer split to br.br_marketplace;
+        s_token_balance_tracker -= split;
+        end;
+      done;
+      // reset bid_history
+      bid_history.put({
+       bh_asset_id = s_token_id;
+       bh_token_id = s_token_id;
+       bh_bid_number = 0;
+      bh_bid_records = [(0, bid_record_init)]
+        });
 
-    // for (n, br) in bid_records do
-      // fail("br: ")
-      // transfer (0.2*marketplace_fee) to br_marketplace
-    // done;
+      // Pay a fair share of royalties back to previous owners of the contract
+      // calculate amount due:
+
+   
+      //Pay seller
+      ledger[s_token_id].l_token_owner := winning_bidder;
+      //Transfer Ownership
+      transfer s_token_balance_tracker to token_owner;
+      //Update token balance locally and in storage
+      s_token_balance_tracker := 0tz;
+      ledger[s_token_id].l_token_balance := s_token_balance_tracker;
       
+ 
+      //Get ownership history local variables
+      const token_oh_asset ?= ownership_history[s_token_id];
+      const owner_number_before_sale = token_oh_asset.oh_owner_number;
+      const token_oh_records = token_oh_asset.oh_oh_records;
+      const previous_owner_record ?= token_oh_records[owner_number_before_sale];
+      
+      //update number of owners on token ownership history asset
 
-  }
+      const owner_number_after_sale = owner_number_before_sale + 1;
+      ownership_history.update(s_token_id,{
+        oh_owner_number = owner_number_after_sale
+      });
+      
+      //update time held for previous owner in their ownership history record
 
+      //Get date of purchase for previous owner
+      const dop_previous_owner = previous_owner_record.ohr_date_purchased;
+      const time_held_previous_owner = now - dop_previous_owner;
+      // ownership_history[s_token_id].oh_oh_records.update( owner_number_before_sale, some({
+      // ohr_date_purchased = ohr_date_purchase;
+      // ohr_owner = ohr_owner;
+      // ohr_purchase_price = ohr_purchase_price;
+      // ohr_burden_paid = ohr_burden_paid;
+      // ohr_is_contract = ohr_is_contract;
+      // ohr_is_creator = ohr_is_creator;
+      // ohr_time_held = time_held_previous_owner
+      // }));
+  
+
+      //add new owner to ownership_history
+      ownership_history[s_token_id].oh_oh_records.put( owner_number_after_sale, {
+        ohr_date_purchased = now;
+        ohr_owner = winning_bidder;
+        ohr_purchase_price = winning_bid;
+        ohr_time_held = 0s;
+        ohr_burden_paid = 0tz;
+        ohr_is_contract = isAddressContract(winning_bidder);
+        ohr_is_creator = (winning_bidder = token_creator)
+      });
+    }
 }
 
+
 //This evenSplit function needs to be replaced with the exponential split
-// function evenSplit(bids : map<nat, bid_record>) : list<tez> {
-//   const len = length(bids);
-//   const split = (1 / len)*1tz;
-//   return map(bids, br -> split)
-// }
+function evenSplit(feeToSplit: tez, bids : map<nat, bid_record>) : map<nat, tez> {
+  var splitMap : map<nat, tez> = [];
+  const bids_length = length(bids);
+  const bid_divisor ?= int_to_nat(bids_length - 1);
+  for (n, br) in bids do
+    const tezDue : tez = feeToSplit div bid_divisor;
+    splitMap.update(n, some(tezDue));
+  done;
+  return splitMap
+}
+
+
+//CURRENTLY HARD CODED - ALWAYS RETURNS FALSE
+function isAddressContract(ad: address) : bool {
+  return false
+}
+
+
 
 /* GETTERS ----------------------------------------------------------------- */
 
