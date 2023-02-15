@@ -331,16 +331,16 @@ it('Second higher offer succeeds', async () => {
     })
 })
 
-// describe('[sell] entrypoint', async () => {
-//   it('Does not fail with correct inputs', async () => {
+describe('[sell] entrypoint', async () => {
+  it('Does not fail with correct inputs', async () => {
 
-//     await tidemark_fa2.sell(new Nat(1), {as: creator_one})
+    await tidemark_fa2.sell(new Nat(1), {as: creator_one})
 
-//     const tidemark_fa2_balance = await tidemark_fa2.get_balance()
+    const tidemark_fa2_balance = await tidemark_fa2.get_balance()
     
-//   })
+  })
 
-// //OWNER IS NOW COLLECTOR_ONE
+//OWNER IS NOW COLLECTOR_ONE
 //   it('Can be bought and sold a few times without error', async () => {
 //     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(5), {as: collector_three, amount: new Tez(5)})
 //     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(30), {as: collector_two, amount: new Tez(30)})
@@ -355,14 +355,14 @@ it('Second higher offer succeeds', async () => {
 //     console.dir(owner_history_one, {depth: null})
 //   })
 
-// })
+})
 
-// function tezMinus(bigSum : Tez, smallSum : Tez) {
-//   const output = bigSum.to_big_number().minus(smallSum.to_big_number())
-//   if (output.isNegative()) throw Error (`tezMinus output of ${output} is invalid.`)
+function tezMinus(bigSum : Tez, smallSum : Tez) {
+  const output = bigSum.to_big_number().minus(smallSum.to_big_number())
+  if (output.isNegative()) throw Error (`tezMinus output of ${output} is invalid.`)
 
-//   return new Tez(output)
-// }
+  return new Tez(output)
+}
 
 function tezAsNumber (input : Tez) {
   return input.to_big_number().dividedBy(1000000).toNumber()

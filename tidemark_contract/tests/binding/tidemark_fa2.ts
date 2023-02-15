@@ -667,6 +667,9 @@ const make_offer_arg_to_mich = (mo_token_id: att.Nat, mo_marketplace: att.Addres
         mo_bid.to_mich()
     ]);
 }
+const sell_arg_to_mich = (s_token_id: att.Nat): att.Micheline => {
+    return s_token_id.to_mich();
+}
 const permit_transfer_arg_to_mich = (txs: Array<transfer_param>, permit: att.Option<[
     att.Key,
     att.Signature
@@ -815,6 +818,12 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
+    async sell(s_token_id: att.Nat, params: Partial<ex.Parameters>): Promise<att.CallResult> {
+        if (this.address != undefined) {
+            return await ex.call(this.address, "sell", sell_arg_to_mich(s_token_id), params);
+        }
+        throw new Error("Contract not initialised");
+    }
     async permit_transfer(txs: Array<transfer_param>, permit: att.Option<[
         att.Key,
         att.Signature
@@ -917,6 +926,12 @@ export class Tidemark_fa2 {
     async get_make_offer_param(mo_token_id: att.Nat, mo_marketplace: att.Address, mo_bid: att.Tez, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
         if (this.address != undefined) {
             return await ex.get_call_param(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace, mo_bid), params);
+        }
+        throw new Error("Contract not initialised");
+    }
+    async get_sell_param(s_token_id: att.Nat, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
+        if (this.address != undefined) {
+            return await ex.get_call_param(this.address, "sell", sell_arg_to_mich(s_token_id), params);
         }
         throw new Error("Contract not initialised");
     }
@@ -1143,8 +1158,11 @@ export class Tidemark_fa2 {
         SIGNER_NOT_FROM: att.string_to_mich("\"SIGNER_NOT_FROM\""),
         fa2_r9: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"fa2_r9\"")]),
         NO_TRANSFER: att.string_to_mich("\"NO_TRANSFER\""),
-        INCOMING_BID_MUST_BE_GREATER_THAN_CURRENT_BID: att.string_to_mich("\"incoming bid must be greater than current bid\""),
+        DEV_ERR__CONST_SPLIT____SPLITMAP_N_: att.string_to_mich("\"DEV_ERR: const split ?= splitMap[n]\""),
+        ONLY_OWNER_OR_THE_CONTRACT_ITSELF_MAY_CALL_THE_SELL_ENTRYPOINT: att.string_to_mich("\"only owner or the contract itself may call the sell entrypoint\""),
+        NO_BIDS_HAVE_BEEN_MADE_ON_THIS_TOKEN: att.string_to_mich("\"no bids have been made on this token\""),
         OPTION_IS_NONE: att.string_to_mich("\"OPTION_IS_NONE\""),
+        INCOMING_BID_MUST_BE_GREATER_THAN_CURRENT_BID: att.string_to_mich("\"incoming bid must be greater than current bid\""),
         tm_r6: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"tm_r6\"")]),
         tm_r3: att.string_to_mich("\"cannot make offer on your own token\""),
         tm_r2: att.string_to_mich("\"bid must be greater than 0\""),
