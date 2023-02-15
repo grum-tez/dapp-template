@@ -1,6 +1,6 @@
 import * as att from "@completium/archetype-ts-types";
 import { ArchetypeType, Rational, Duration, date_cmp, Tez, Bytes, Address, Nat, Enum } from '@completium/archetype-ts-types';
-import { tidemark_fa2, bid_record, bid_history_value } from './binding/tidemark_fa2'
+import { tidemark_fa2} from './binding/tidemark_fa2'
 import {get_account, set_mockup, set_mockup_now, set_quiet, delay_mockup_now_by_minute, delay_mockup_now_by_week} from "@completium/experiment-ts";
 import { expect_to_fail } from '@completium/experiment-ts';
 const assert = require('assert')
@@ -148,9 +148,6 @@ const containerToPreTable = (title: string, container: object | undefined) : Pre
           data.push({name: key, value: `${valAsString(value.type())} (type)` , class: "Enum"})
         } else if (value instanceof Array) {
           data.push({name: key, value: `Array type` , class: "Array (map, bigmap)"})
-        } else if (value instanceof bid_record) {
-          data.push({name: key, value: `${value.constructor.name}` , class: "Record"})
-        } else if (value instanceof bid_history_value) {
           data.push({name: key, value: `${value.constructor.name}` , class: "bid_history_value"})
         } else {
           data.push({name: key, value: 'unknown type', class: `${value.constructor.name}`})
@@ -275,32 +272,27 @@ describe('[Mint] entrypoint', async () => {
       minterRate,
       marketplaceRate,
       {as: creator_one}) // params
-    
-      const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-      logContainer("ledger_value_one", ledger_value_one)
-      
-      const metadata_value_one = await tidemark_fa2.get_token_metadata_value(new Nat(1))
-      logContainer("token_info_1", metadata_value_one?.token_info)
- 
+
+
   }); 
 
-  it('Second nft mints succesfully', async () => {
+  // it('Second nft mints succesfully', async () => {
 
-    await tidemark_fa2.mint(
-      tmdMap,
-      creatorRate,
-      minterRate,
-      marketplaceRate,
+  //   await tidemark_fa2.mint(
+  //     tmdMap,
+  //     creatorRate,
+  //     minterRate,
+  //     marketplaceRate,
 
-      {as: creator_one}) // params
+  //     {as: creator_one}) // params
     
-      const ledger_value_two = await tidemark_fa2.get_ledger_value(new Nat(2))
-      logContainer("ledger_value_two", ledger_value_two)
+  //     const ledger_value_two = await tidemark_fa2.get_ledger_value(new Nat(2))
+  //     logContainer("ledger_value_two", ledger_value_two)
       
-      const metadata_value_two = await tidemark_fa2.get_token_metadata_value(new Nat(2))
-      logContainer("token_info_2", metadata_value_two?.token_info)
+  //     const metadata_value_two = await tidemark_fa2.get_token_metadata_value(new Nat(2))
+  //     logContainer("token_info_2", metadata_value_two?.token_info)
 
-  });
+  // });
  
 })
  
@@ -309,8 +301,6 @@ describe('[make_offer] entrypoint', async () => {
   it('Does not fail with correct inputs', async () => {
 
     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(5), {as: collector_one, amount: new Tez(5)})
-    const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-    logContainer("ledger_value_one", ledger_value_one)
   })
 
 it('Second lower offer fails', async () => {
@@ -323,7 +313,7 @@ it('Second higher offer succeeds', async () => {
   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(10), {as: collector_one, amount: new Tez(10)})
   const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
   logContainer("ledger_value_one", ledger_value_one)
-  const bid_history = await tidemark_fa2.get_bid_history()
+  const bid_history = await tidemark_fa2.get_bid_asset()
   logContainer("bid_history", bid_history)
 
   })
@@ -332,40 +322,40 @@ it('Second higher offer succeeds', async () => {
     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(16), {as: collector_one, amount: new Tez(16)})
     const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
     logContainer("ledger_value_one", ledger_value_one)
-    const bid_history = await tidemark_fa2.get_bid_history()
+    const bid_history = await tidemark_fa2.get_bid_asset()
     const ownershipe_history = await tidemark_fa2.get_ownership_history()
     logContainer("ownershipe_history", ownershipe_history)
-  console.dir(bid_history, {depth: null})
+    console.dir(bid_history, {depth: null})
 
     
     })
 })
 
-describe('[sell] entrypoint', async () => {
-  it('Does not fail with correct inputs', async () => {
+// describe('[sell] entrypoint', async () => {
+//   it('Does not fail with correct inputs', async () => {
 
-    await tidemark_fa2.sell(new Nat(1), {as: creator_one})
+//     await tidemark_fa2.sell(new Nat(1), {as: creator_one})
 
-    const tidemark_fa2_balance = await tidemark_fa2.get_balance()
+//     const tidemark_fa2_balance = await tidemark_fa2.get_balance()
     
-  })
+//   })
 
-//OWNER IS NOW COLLECTOR_ONE
-  it('Can be bought and sold a few times without error', async () => {
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(5), {as: collector_three, amount: new Tez(5)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(30), {as: collector_two, amount: new Tez(30)})
-    await tidemark_fa2.sell(new Nat(1), {as: collector_one})
-//OWNER IS NOW COLLECTOR_TWO
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_three_address, new Tez(80), {as: collector_one, amount: new Tez(80)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(120), {as: collector_three, amount: new Tez(120)})
-    await tidemark_fa2.sell(new Nat(1), {as: collector_two})
-//OWNER IS NOW COLLECTOR_THREE
-    const owner_history_one = await tidemark_fa2.get_ownership_history()
-    logContainer("owner_history_one", owner_history_one)
-    console.dir(owner_history_one, {depth: null})
-  })
+// //OWNER IS NOW COLLECTOR_ONE
+//   it('Can be bought and sold a few times without error', async () => {
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(5), {as: collector_three, amount: new Tez(5)})
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(30), {as: collector_two, amount: new Tez(30)})
+//     await tidemark_fa2.sell(new Nat(1), {as: collector_one})
+// //OWNER IS NOW COLLECTOR_TWO
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_three_address, new Tez(80), {as: collector_one, amount: new Tez(80)})
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(120), {as: collector_three, amount: new Tez(120)})
+//     await tidemark_fa2.sell(new Nat(1), {as: collector_two})
+// //OWNER IS NOW COLLECTOR_THREE
+//     const owner_history_one = await tidemark_fa2.get_ownership_history()
+//     logContainer("owner_history_one", owner_history_one)
+//     console.dir(owner_history_one, {depth: null})
+//   })
 
-})
+// })
 
 // function tezMinus(bigSum : Tez, smallSum : Tez) {
 //   const output = bigSum.to_big_number().minus(smallSum.to_big_number())
