@@ -168,21 +168,6 @@ export class transfer_param implements att.ArchetypeType {
         return new transfer_param(att.Address.from_mich((input as att.Mpair).args[0]), att.mich_to_list((input as att.Mpair).args[1], x => { return transfer_destination.from_mich(x); }));
     }
 }
-export class oh_record implements att.ArchetypeType {
-    constructor(public ohr_date_purchased: Date, public ohr_owner: att.Address, public ohr_purchase_price: att.Tez, public ohr_time_held: att.Duration, public ohr_burden_paid: att.Tez, public ohr_is_contract: boolean, public ohr_is_creator: boolean) { }
-    toString(): string {
-        return JSON.stringify(this, null, 2);
-    }
-    to_mich(): att.Micheline {
-        return att.pair_to_mich([att.date_to_mich(this.ohr_date_purchased), this.ohr_owner.to_mich(), this.ohr_purchase_price.to_mich(), this.ohr_time_held.to_mich(), this.ohr_burden_paid.to_mich(), att.bool_to_mich(this.ohr_is_contract), att.bool_to_mich(this.ohr_is_creator)]);
-    }
-    equals(v: oh_record): boolean {
-        return att.micheline_equals(this.to_mich(), v.to_mich());
-    }
-    static from_mich(input: att.Micheline): oh_record {
-        return new oh_record(att.mich_to_date((input as att.Mpair).args[0]), att.Address.from_mich((input as att.Mpair).args[1]), att.Tez.from_mich((input as att.Mpair).args[2]), att.Duration.from_mich((input as att.Mpair).args[3]), att.Tez.from_mich((input as att.Mpair).args[4]), att.mich_to_bool((input as att.Mpair).args[5]), att.mich_to_bool((input as att.Mpair).args[6]));
-    }
-}
 export class operator_param implements att.ArchetypeType {
     constructor(public opp_owner: att.Address, public opp_operator: att.Address, public opp_token_id: att.Nat) { }
     toString(): string {
@@ -262,15 +247,6 @@ export const transfer_param_mich_type: att.MichelineType = att.pair_array_to_mic
         ], [])
     ], []), ["%txs"])
 ], []);
-export const oh_record_mich_type: att.MichelineType = att.pair_array_to_mich_type([
-    att.prim_annot_to_mich_type("timestamp", ["%ohr_date_purchased"]),
-    att.prim_annot_to_mich_type("address", ["%ohr_owner"]),
-    att.prim_annot_to_mich_type("mutez", ["%ohr_purchase_price"]),
-    att.prim_annot_to_mich_type("int", ["%ohr_time_held"]),
-    att.prim_annot_to_mich_type("mutez", ["%ohr_burden_paid"]),
-    att.prim_annot_to_mich_type("bool", ["%ohr_is_contract"]),
-    att.prim_annot_to_mich_type("bool", ["%ohr_is_creator"])
-], []);
 export const operator_param_mich_type: att.MichelineType = att.pair_array_to_mich_type([
     att.prim_annot_to_mich_type("address", ["%contract_owner"]),
     att.pair_array_to_mich_type([
@@ -335,8 +311,8 @@ export class operator_for_all_key implements att.ArchetypeType {
 }
 export const token_metadata_key_mich_type: att.MichelineType = att.prim_annot_to_mich_type("nat", []);
 export const bid_asset_key_mich_type: att.MichelineType = att.prim_annot_to_mich_type("string", []);
+export const ownership_asset_key_mich_type: att.MichelineType = att.prim_annot_to_mich_type("string", []);
 export const ledger_key_mich_type: att.MichelineType = att.prim_annot_to_mich_type("nat", []);
-export const ownership_history_key_mich_type: att.MichelineType = att.prim_annot_to_mich_type("nat", []);
 export const operator_key_mich_type: att.MichelineType = att.pair_array_to_mich_type([
     att.prim_annot_to_mich_type("address", ["%oaddr"]),
     att.pair_array_to_mich_type([
@@ -385,13 +361,30 @@ export class bid_asset_value implements att.ArchetypeType {
         return new bid_asset_value(att.Nat.from_mich((input as att.Mpair).args[0]), att.Tez.from_mich((input as att.Mpair).args[1]), att.Address.from_mich((input as att.Mpair).args[2]), att.Address.from_mich((input as att.Mpair).args[3]));
     }
 }
-export class ledger_value implements att.ArchetypeType {
-    constructor(public l_token_creator: att.Address, public l_token_owner: att.Address, public l_token_balance: att.Tez, public l_tidemark: att.Tez, public l_creator_rate: att.Rational, public l_marketplace_rate: att.Rational, public l_minter_rate: att.Rational, public l_sale_cycle_state: sale_cycle_state, public l_tidemark_duration: att.Duration, public l_grace_period_duration: att.Duration, public l_bid_count: att.Nat, public l_bids: Array<string>) { }
+export class ownership_asset_value implements att.ArchetypeType {
+    constructor(public owner_number: att.Nat, public date_purchased: Date, public owner: att.Address, public purchase_price: att.Tez, public time_held: att.Duration, public burden_paid: att.Tez) { }
     toString(): string {
         return JSON.stringify(this, null, 2);
     }
     to_mich(): att.Micheline {
-        return att.pair_to_mich([this.l_token_creator.to_mich(), this.l_token_owner.to_mich(), this.l_token_balance.to_mich(), this.l_tidemark.to_mich(), this.l_creator_rate.to_mich(), this.l_marketplace_rate.to_mich(), this.l_minter_rate.to_mich(), this.l_sale_cycle_state.to_mich(), this.l_tidemark_duration.to_mich(), this.l_grace_period_duration.to_mich(), this.l_bid_count.to_mich(), att.list_to_mich(this.l_bids, x => {
+        return att.pair_to_mich([this.owner_number.to_mich(), att.date_to_mich(this.date_purchased), this.owner.to_mich(), this.purchase_price.to_mich(), this.time_held.to_mich(), this.burden_paid.to_mich()]);
+    }
+    equals(v: ownership_asset_value): boolean {
+        return att.micheline_equals(this.to_mich(), v.to_mich());
+    }
+    static from_mich(input: att.Micheline): ownership_asset_value {
+        return new ownership_asset_value(att.Nat.from_mich((input as att.Mpair).args[0]), att.mich_to_date((input as att.Mpair).args[1]), att.Address.from_mich((input as att.Mpair).args[2]), att.Tez.from_mich((input as att.Mpair).args[3]), att.Duration.from_mich((input as att.Mpair).args[4]), att.Tez.from_mich((input as att.Mpair).args[5]));
+    }
+}
+export class ledger_value implements att.ArchetypeType {
+    constructor(public l_token_creator: att.Address, public l_token_owner: att.Address, public l_token_balance: att.Tez, public l_tidemark: att.Tez, public l_creator_rate: att.Rational, public l_marketplace_rate: att.Rational, public l_minter_rate: att.Rational, public l_sale_cycle_state: sale_cycle_state, public l_tidemark_duration: att.Duration, public l_grace_period_duration: att.Duration, public l_bid_number: att.Nat, public l_bids: Array<string>, public l_owner_number: att.Nat, public l_ownership: Array<string>) { }
+    toString(): string {
+        return JSON.stringify(this, null, 2);
+    }
+    to_mich(): att.Micheline {
+        return att.pair_to_mich([this.l_token_creator.to_mich(), this.l_token_owner.to_mich(), this.l_token_balance.to_mich(), this.l_tidemark.to_mich(), this.l_creator_rate.to_mich(), this.l_marketplace_rate.to_mich(), this.l_minter_rate.to_mich(), this.l_sale_cycle_state.to_mich(), this.l_tidemark_duration.to_mich(), this.l_grace_period_duration.to_mich(), this.l_bid_number.to_mich(), att.list_to_mich(this.l_bids, x => {
+                return att.string_to_mich(x);
+            }), this.l_owner_number.to_mich(), att.list_to_mich(this.l_ownership, x => {
                 return att.string_to_mich(x);
             })]);
     }
@@ -399,29 +392,7 @@ export class ledger_value implements att.ArchetypeType {
         return att.micheline_equals(this.to_mich(), v.to_mich());
     }
     static from_mich(input: att.Micheline): ledger_value {
-        return new ledger_value(att.Address.from_mich((input as att.Mpair).args[0]), att.Address.from_mich((input as att.Mpair).args[1]), att.Tez.from_mich((input as att.Mpair).args[2]), att.Tez.from_mich((input as att.Mpair).args[3]), att.Rational.from_mich((input as att.Mpair).args[4]), att.Rational.from_mich((input as att.Mpair).args[5]), att.Rational.from_mich((input as att.Mpair).args[6]), mich_to_sale_cycle_state((input as att.Mpair).args[7]), att.Duration.from_mich((input as att.Mpair).args[8]), att.Duration.from_mich((input as att.Mpair).args[9]), att.Nat.from_mich((input as att.Mpair).args[10]), att.mich_to_list((input as att.Mpair).args[11], x => { return att.mich_to_string(x); }));
-    }
-}
-export class ownership_history_value implements att.ArchetypeType {
-    constructor(public oh_token_id: att.Nat, public oh_owner_number: att.Nat, public oh_oh_records: Array<[
-        att.Nat,
-        oh_record
-    ]>) { }
-    toString(): string {
-        return JSON.stringify(this, null, 2);
-    }
-    to_mich(): att.Micheline {
-        return att.pair_to_mich([this.oh_token_id.to_mich(), this.oh_owner_number.to_mich(), att.list_to_mich(this.oh_oh_records, x => {
-                const x_key = x[0];
-                const x_value = x[1];
-                return att.elt_to_mich(x_key.to_mich(), x_value.to_mich());
-            })]);
-    }
-    equals(v: ownership_history_value): boolean {
-        return att.micheline_equals(this.to_mich(), v.to_mich());
-    }
-    static from_mich(input: att.Micheline): ownership_history_value {
-        return new ownership_history_value(att.Nat.from_mich((input as att.Mpair).args[0]), att.Nat.from_mich((input as att.Mpair).args[1]), att.mich_to_map((input as att.Mpair).args[2], (x, y) => [att.Nat.from_mich(x), oh_record.from_mich(y)]));
+        return new ledger_value(att.Address.from_mich((input as att.Mpair).args[0]), att.Address.from_mich((input as att.Mpair).args[1]), att.Tez.from_mich((input as att.Mpair).args[2]), att.Tez.from_mich((input as att.Mpair).args[3]), att.Rational.from_mich((input as att.Mpair).args[4]), att.Rational.from_mich((input as att.Mpair).args[5]), att.Rational.from_mich((input as att.Mpair).args[6]), mich_to_sale_cycle_state((input as att.Mpair).args[7]), att.Duration.from_mich((input as att.Mpair).args[8]), att.Duration.from_mich((input as att.Mpair).args[9]), att.Nat.from_mich((input as att.Mpair).args[10]), att.mich_to_list((input as att.Mpair).args[11], x => { return att.mich_to_string(x); }), att.Nat.from_mich((input as att.Mpair).args[12]), att.mich_to_list((input as att.Mpair).args[13], x => { return att.mich_to_string(x); }));
     }
 }
 export class operator_value implements att.ArchetypeType {
@@ -464,6 +435,14 @@ export const bid_asset_value_mich_type: att.MichelineType = att.pair_array_to_mi
     att.prim_annot_to_mich_type("address", ["%bidder"]),
     att.prim_annot_to_mich_type("address", ["%marketplace"])
 ], []);
+export const ownership_asset_value_mich_type: att.MichelineType = att.pair_array_to_mich_type([
+    att.prim_annot_to_mich_type("nat", ["%owner_number"]),
+    att.prim_annot_to_mich_type("timestamp", ["%date_purchased"]),
+    att.prim_annot_to_mich_type("address", ["%owner"]),
+    att.prim_annot_to_mich_type("mutez", ["%purchase_price"]),
+    att.prim_annot_to_mich_type("int", ["%time_held"]),
+    att.prim_annot_to_mich_type("mutez", ["%burden_paid"])
+], []);
 export const ledger_value_mich_type: att.MichelineType = att.pair_array_to_mich_type([
     att.prim_annot_to_mich_type("address", ["%l_token_creator"]),
     att.prim_annot_to_mich_type("address", ["%l_token_owner"]),
@@ -484,21 +463,10 @@ export const ledger_value_mich_type: att.MichelineType = att.pair_array_to_mich_
     att.prim_annot_to_mich_type("int", ["%l_sale_cycle_state"]),
     att.prim_annot_to_mich_type("int", ["%l_tidemark_duration"]),
     att.prim_annot_to_mich_type("int", ["%l_grace_period_duration"]),
-    att.prim_annot_to_mich_type("nat", ["%l_bid_count"]),
-    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_bids"])
-], []);
-export const ownership_history_value_mich_type: att.MichelineType = att.pair_array_to_mich_type([
-    att.prim_annot_to_mich_type("nat", ["%oh_token_id"]),
-    att.prim_annot_to_mich_type("nat", ["%oh_owner_number"]),
-    att.pair_annot_to_mich_type("map", att.prim_annot_to_mich_type("nat", []), att.pair_array_to_mich_type([
-        att.prim_annot_to_mich_type("timestamp", ["%ohr_date_purchased"]),
-        att.prim_annot_to_mich_type("address", ["%ohr_owner"]),
-        att.prim_annot_to_mich_type("mutez", ["%ohr_purchase_price"]),
-        att.prim_annot_to_mich_type("int", ["%ohr_time_held"]),
-        att.prim_annot_to_mich_type("mutez", ["%ohr_burden_paid"]),
-        att.prim_annot_to_mich_type("bool", ["%ohr_is_contract"]),
-        att.prim_annot_to_mich_type("bool", ["%ohr_is_creator"])
-    ], []), ["%oh_oh_records"])
+    att.prim_annot_to_mich_type("nat", ["%l_bid_number"]),
+    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_bids"]),
+    att.prim_annot_to_mich_type("nat", ["%l_owner_number"]),
+    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_ownership"])
 ], []);
 export const operator_value_mich_type: att.MichelineType = att.prim_annot_to_mich_type("unit", []);
 export const operator_for_all_value_mich_type: att.MichelineType = att.prim_annot_to_mich_type("unit", []);
@@ -510,13 +478,13 @@ export type bid_asset_container = Array<[
     string,
     bid_asset_value
 ]>;
+export type ownership_asset_container = Array<[
+    string,
+    ownership_asset_value
+]>;
 export type ledger_container = Array<[
     att.Nat,
     ledger_value
-]>;
-export type ownership_history_container = Array<[
-    att.Nat,
-    ownership_history_value
 ]>;
 export type operator_container = Array<[
     operator_key,
@@ -535,6 +503,14 @@ export const bid_asset_container_mich_type: att.MichelineType = att.pair_annot_t
     att.prim_annot_to_mich_type("mutez", ["%bid"]),
     att.prim_annot_to_mich_type("address", ["%bidder"]),
     att.prim_annot_to_mich_type("address", ["%marketplace"])
+], []), []);
+export const ownership_asset_container_mich_type: att.MichelineType = att.pair_annot_to_mich_type("map", att.prim_annot_to_mich_type("string", []), att.pair_array_to_mich_type([
+    att.prim_annot_to_mich_type("nat", ["%owner_number"]),
+    att.prim_annot_to_mich_type("timestamp", ["%date_purchased"]),
+    att.prim_annot_to_mich_type("address", ["%owner"]),
+    att.prim_annot_to_mich_type("mutez", ["%purchase_price"]),
+    att.prim_annot_to_mich_type("int", ["%time_held"]),
+    att.prim_annot_to_mich_type("mutez", ["%burden_paid"])
 ], []), []);
 export const ledger_container_mich_type: att.MichelineType = att.pair_annot_to_mich_type("big_map", att.prim_annot_to_mich_type("nat", []), att.pair_array_to_mich_type([
     att.prim_annot_to_mich_type("address", ["%l_token_creator"]),
@@ -556,21 +532,10 @@ export const ledger_container_mich_type: att.MichelineType = att.pair_annot_to_m
     att.prim_annot_to_mich_type("int", ["%l_sale_cycle_state"]),
     att.prim_annot_to_mich_type("int", ["%l_tidemark_duration"]),
     att.prim_annot_to_mich_type("int", ["%l_grace_period_duration"]),
-    att.prim_annot_to_mich_type("nat", ["%l_bid_count"]),
-    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_bids"])
-], []), []);
-export const ownership_history_container_mich_type: att.MichelineType = att.pair_annot_to_mich_type("map", att.prim_annot_to_mich_type("nat", []), att.pair_array_to_mich_type([
-    att.prim_annot_to_mich_type("nat", ["%oh_token_id"]),
-    att.prim_annot_to_mich_type("nat", ["%oh_owner_number"]),
-    att.pair_annot_to_mich_type("map", att.prim_annot_to_mich_type("nat", []), att.pair_array_to_mich_type([
-        att.prim_annot_to_mich_type("timestamp", ["%ohr_date_purchased"]),
-        att.prim_annot_to_mich_type("address", ["%ohr_owner"]),
-        att.prim_annot_to_mich_type("mutez", ["%ohr_purchase_price"]),
-        att.prim_annot_to_mich_type("int", ["%ohr_time_held"]),
-        att.prim_annot_to_mich_type("mutez", ["%ohr_burden_paid"]),
-        att.prim_annot_to_mich_type("bool", ["%ohr_is_contract"]),
-        att.prim_annot_to_mich_type("bool", ["%ohr_is_creator"])
-    ], []), ["%oh_oh_records"])
+    att.prim_annot_to_mich_type("nat", ["%l_bid_number"]),
+    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_bids"]),
+    att.prim_annot_to_mich_type("nat", ["%l_owner_number"]),
+    att.set_annot_to_mich_type(att.prim_annot_to_mich_type("string", []), ["%l_ownership"])
 ], []), []);
 export const operator_container_mich_type: att.MichelineType = att.pair_annot_to_mich_type("big_map", att.pair_array_to_mich_type([
     att.prim_annot_to_mich_type("address", ["%oaddr"]),
@@ -1036,10 +1001,17 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
+    async get_ownership_asset(): Promise<ownership_asset_container> {
+        if (this.address != undefined) {
+            const storage = await ex.get_raw_storage(this.address);
+            return att.mich_to_map((storage as att.Mpair).args[9], (x, y) => [att.mich_to_string(x), ownership_asset_value.from_mich(y)]);
+        }
+        throw new Error("Contract not initialised");
+    }
     async get_ledger_value(key: att.Nat): Promise<ledger_value | undefined> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[9]).toString()), key.to_mich(), ledger_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[10]).toString()), key.to_mich(), ledger_key_mich_type);
             if (data != undefined) {
                 return ledger_value.from_mich(data);
             }
@@ -1052,20 +1024,13 @@ export class Tidemark_fa2 {
     async has_ledger_value(key: att.Nat): Promise<boolean> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[9]).toString()), key.to_mich(), ledger_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[10]).toString()), key.to_mich(), ledger_key_mich_type);
             if (data != undefined) {
                 return true;
             }
             else {
                 return false;
             }
-        }
-        throw new Error("Contract not initialised");
-    }
-    async get_ownership_history(): Promise<ownership_history_container> {
-        if (this.address != undefined) {
-            const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[10], (x, y) => [att.Nat.from_mich(x), ownership_history_value.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
