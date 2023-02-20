@@ -4,6 +4,7 @@ archetype tidemark_fa2(contract_owner : address, permits : address, minter : add
 
 variable owner_candidate : option<address> = none
 variable null_address: address = KT18amZmM5W7qDWVt2pH6uj7sCEd3kbzLrHT
+variable owner_one_address: address = tz1UibLhnQeRa3LYNaa2SwLgfXpVRXGzG8g8
 
 entry declare_ownership(candidate : address) {
   no transfer
@@ -143,6 +144,18 @@ asset ownership_asset {
   time_held: duration;
   burden_paid: tez;
 }
+//owr = "ownership working record"
+// record owr {
+//   owr_previous_price : tez = 0tz;
+//   owr_purchase_price : tez;
+//   owr_time_held : duration;
+// }
+
+
+record band {
+  lower: tez;
+  upper: tez;
+}
 
 asset ledger identified by l_token_id to big_map {
   l_token_id   : nat;
@@ -151,6 +164,7 @@ asset ledger identified by l_token_id to big_map {
   l_token_balance : tez = 0tz;
   l_tidemark: tez = 0tz;
   l_creator_rate: rational;
+  l_creator_fee_paid_since_last_sale: tez = 0tz;
   l_marketplace_rate: rational;
   l_minter_rate: rational;
   l_sale_cycle_state: sale_cycle_state = tidemark_auction;
@@ -204,6 +218,76 @@ function check_operator(txs : list<transfer_param>) : bool {
     done
   done;
   return res
+}
+
+//Sell utilites:
+function get_band_total(m: map<string, duration>) : duration {
+  var total: duration = 0s;
+  for (k, v) in m do
+    total += v;
+  done;
+  return total
+}
+
+function get_all_band_totals_map(all_bands_duration_map: map<band, map<string, duration>>) : map<band, duration> {
+  var total_map: map<band, duration> = [];
+  for (k, v) in all_bands_duration_map do
+    total_map.put(k, get_band_total(v));
+  done;
+  return total_map
+}
+
+function convert_one_band_duration_map_to_one_band_fair_burden_map(burden_to_split : tez, one_band_duration_map: map<string, duration>, total: duration) : map<string, tez> {
+  var one_band_fair_burden_map: map<string, tez> = [];
+  for (k, v) in one_band_duration_map do
+    const proportion = v / total;
+    const fair_burden = proportion * burden_to_split;
+    one_band_fair_burden_map.put(k, fair_burden);
+  done;
+  return one_band_fair_burden_map
+}
+
+function convert_all_bands_duration_map_to_all_bands_fair_burden_map(all_bands_duration_map: map<band, map<string, duration>>, totals: map<band, duration>, creator_rate: rational) : map<band, map<string, tez>> {
+  var all_bands_fair_burden_map: map<band, map<string, tez>> = [];
+  for (band_record, v) in all_bands_duration_map do
+    const this_band_total_duration ?= totals[band_record];
+    const this_bands_durations ?= all_bands_duration_map[band_record];
+    const this_bands_burden = creator_rate * (band_record.upper - band_record.lower);
+    const this_bands_fair_burdens: map<string, tez> = 
+      convert_one_band_duration_map_to_one_band_fair_burden_map(this_bands_burden, this_bands_durations, this_band_total_duration);
+    all_bands_fair_burden_map.put(band_record, this_bands_fair_burdens);
+  done;
+  return all_bands_fair_burden_map
+}
+
+function get_all_bands_fair_burden_map(all_bands_duration_map: map<band, map<string, duration>>, creator_rate: rational) : map<band, map<string, tez>> {
+  const totals: map<band, duration> = get_all_band_totals_map(all_bands_duration_map);
+  return convert_all_bands_duration_map_to_all_bands_fair_burden_map(all_bands_duration_map, totals, creator_rate)
+}
+
+function get_fair_burden_by_id_map(all_bands_fair_burden_map: map<band, map<string, tez>>): map<string, tez> {
+  var fair_burden_by_id_map: map<string, tez> = [];
+  for (band_record, v) in all_bands_fair_burden_map do
+    for (id, burden) in v do
+      match fair_burden_by_id_map[id] with
+      | some(t) -> fair_burden_by_id_map.put(id, t + burden)
+      | none -> fair_burden_by_id_map.put(id, burden)
+      end;
+    done;
+  done;
+  return fair_burden_by_id_map
+}
+
+// THIS FAILS AT THE MOMENT BECAUSE this_burden_paid IS ALWAYS ZERO
+function get_refund_due_map(fair_burden_by_id_map: map<string, tez>) : map<string, tez> {
+  var refund_due_map: map<string, tez> = [];
+  for (id, fair_burden) in fair_burden_by_id_map do
+    const this_burden_paid = ownership_asset[id].burden_paid;
+    const diff = this_burden_paid - fair_burden;
+    const this_refund_due = diff >= 0tz ? diff : 0tz;
+    refund_due_map.put(id, this_refund_due)
+  done;
+  return refund_due_map
 }
 
 /* ENTRYPOINTS ------------------------------------------------------------- */
@@ -454,6 +538,7 @@ entry make_offer(
       //...and pay the creator and minter their fees.
       transfer creator_fee to ledger[mo_token_id].l_token_creator;
       mo_token_balance_tracker -= creator_fee;
+      ledger[mo_token_id].l_creator_fee_paid_since_last_sale += creator_fee;
       transfer minter_fee to minter;
       mo_token_balance_tracker -= minter_fee;
     end;
@@ -480,7 +565,12 @@ entry make_offer(
     ledger[mo_token_id].l_token_balance := mo_token_balance_tracker;
      }
   }
-
+variable all_bands_duration_map_out : map<band, map<string, duration>> = []
+variable total_time_held_map_out : map<band, duration> = []
+variable all_bands_proportion_map_out : map<band, map<string, rational>> = []
+variable all_bands_fair_burden_map_out : map<band, map<string, tez>> = []
+variable fair_burden_by_id_map_out : map<string, tez> = []
+variable refund_due_out : map<string, tez> = []
 
 entry sell(s_token_id : nat) {
   effect {
@@ -489,9 +579,22 @@ entry sell(s_token_id : nat) {
       const last_bid_asset_value ?= bid_asset[last_bid_asset_id];
       const winning_bid = last_bid_asset_value.bid;
       const winning_bidder = last_bid_asset_value.bidder;
+      const creator_rate = ledger[s_token_id].l_creator_rate;
       const marketplace_rate = ledger[s_token_id].l_marketplace_rate;
       const marketplace_fee = marketplace_rate * winning_bid;
       const seller = ledger[s_token_id].l_token_owner;
+
+      //Get seller owner number
+      const owner_number_before_sale = ledger[s_token_id].l_owner_number;
+    
+      // updte owner_number on token ledger asset value
+      const owner_number_after_sale = owner_number_before_sale + 1;
+      ledger[s_token_id].l_owner_number := owner_number_after_sale;
+      
+      // Get seller ownership id into local variable
+      const seller_ownership_id = make_ownership_id(s_token_id, owner_number_before_sale);
+
+
       //REQUIREMENTS:
       do_require(winning_bid_number > 0, "no bids have been made on this token");
       do_require(caller = ledger[s_token_id].l_token_owner or caller = self_address, "only owner or the contract itself may call the sell entrypoint");
@@ -524,19 +627,109 @@ entry sell(s_token_id : nat) {
       //reset bid_number
       ledger[s_token_id].l_bid_number := 0;
 
+      // Update seller's burden_paid and reset l_creator_fee_paid_since_last_sale
+      const seller_burden_paid = ledger[s_token_id].l_creator_fee_paid_since_last_sale;
+      ledger[s_token_id].l_creator_fee_paid_since_last_sale := 0tz;
+      ownership_asset[seller_ownership_id].burden_paid += seller_burden_paid;
       // Pay a fair share of royalties back to previous owners of the contract
         // get an asset view of post ownerships sorted from lowest to highest price
 
-        const token_oh = ledger[s_token_id].l_ownership.select(true);
-        const token_oh_sorted = token_oh.sort(purchase_price);
+        //Do I need to sort these by price? Will they be sorted automatically by "set"?
+        // const token_oh_sorted = token_oh.sort(purchase_price);
 
-        var theLine = 0mtz;
-        var theBand = (0mtz, theLine);
+        // var working_map: map<string, owr> = [];
+
+        // for id in token_oh_sorted do
+        //   working_map.put(
+        //     id, {
+        //       owr_purchase_price = ownership_asset[id].purchase_price;
+        //       owr_time_held = ownership_asset[id].time_held
+        //   })
+        // done;
+
+        // const purchased_price_set = get_purchased_price_set(working_map);
 
 
+      //Update time held for previous owner in their ownership history record:
+        //Get date of purchase for previous owner...
+      const dop_previous_owner = ownership_asset[seller_ownership_id].date_purchased;
+        //... use the date of purchase to calculate time held ...     
+      const time_held_previous_owner = now - dop_previous_owner;
+        //... update time held in the seller's ownership history asset value: 
+      ownership_asset.update(seller_ownership_id, {
+        time_held := time_held_previous_owner
+        }); 
+        
+        //Get the ownership history specific to this token:
+        const token_oh = ledger[s_token_id].l_ownership.select(purchase_price > 0tz);
+        const sorted_token_oh = token_oh.sort(purchase_price);
+
+        //initialise map of bands to times held by various owners in that band
+        var all_bands_duration_map: map<band, map<string, duration>> = [];
+        // all_bands_duration_map: map<band, map<ownership_asset_id, time_held>>
+        var last_price = 0tz;
+        for id in sorted_token_oh do
+          //We've got a view of assets that are sorted by purchase price, each with a unique id
+          //However, some may have the same price, so we need to group those in the same bands,
+          // which will mean treating them differently to the other cases.
+        const this_price = ownership_asset[id].purchase_price;
+        const this_band: band = {
+          lower = last_price;
+          upper = this_price
+        };
+        //If this is the first of this price:
+        if last_price <> this_price then begin
+          //Create a new map for this band
+        const empty_duration_map: map<string, duration> = [];
+        all_bands_duration_map.put(this_band, empty_duration_map);
+        end;
+        
+        //add the duration tuples to all bands
+         for (band_record, duration_map) in all_bands_duration_map do
+          const this_time_held = ownership_asset[id].time_held;
+          duration_map.put(id, this_time_held);
+          all_bands_duration_map.put(band_record, duration_map);
+
+          //Duration map to total_time function - which is fed into a all_bands_duration_map to map of total_times function 
+          //Update the total time held in the band, 5s)
+
+         done;
+         last_price := this_price;
+        done;
+
+
+        // all_bands_fair_burden_map_out := get_all_bands_fair_burden_map(all_bands_duration_map, creator_rate);
+        fair_burden_by_id_map_out := get_fair_burden_by_id_map(get_all_bands_fair_burden_map(all_bands_duration_map, creator_rate));
+
+        refund_due_out := get_refund_due_map(
+        get_fair_burden_by_id_map(get_all_bands_fair_burden_map(all_bands_duration_map, creator_rate)));
+
+        // var total_time_held_map: map<band, duration> = get_all_band_totals_map(all_bands_duration_map);
+
+        // band_map_out := all_bands_duration_map;
+        // total_time_held_map_out := total_time_held_map;
+
+      
+
+      var fair_burden_map: map<string, tez> = [];
+
+      // for (band_rec, time_held_map) in all_bands_duration_map do
+      //   const total_time_held_this_band = band_rec.band_time_held;
+      //   for (id, t_h) in time_held_map do 
+      //   const proportion_of_time_held = t_h / total_time_held_this_band;
+      //   const creator_fee_this_band = creator_rate * (band_rec.upper - band_rec.lower);
+      //   const fair_burden_this_band = proportion_of_time_held * creator_fee_this_band;
         
 
+      //   done
 
+      //   //WORKING BACKWARDS, WE JUST WANT A MAP :=> map<string, tez> that gives map<id, fair_burden>
+      //   //Then we iterate across this, comparing it to the actual burden paid, and balance the difference.
+      // //   const creator_fee_this_band = creator_rate * (k.upper - k.lower);
+
+      // done;
+
+        // owm_out := all_bands_duration_map;
 
       //Pay seller
       transfer s_token_balance_tracker to seller;
@@ -548,24 +741,7 @@ entry sell(s_token_id : nat) {
       ledger[s_token_id].l_token_balance := s_token_balance_tracker;
       
  
-      //Get seller owner number
-      const owner_number_before_sale = ledger[s_token_id].l_owner_number;
-    
-      // update owner_number on token ledger asset value
-      const owner_number_after_sale = owner_number_before_sale + 1;
-      ledger[s_token_id].l_owner_number := owner_number_after_sale;
-      
-      // Get seller ownership id into local variable
-      const seller_ownership_id = make_ownership_id(s_token_id, owner_number_before_sale);
 
-      //Update time held for previous owner in their ownership history record:
-        //Get date of purchase for previous owner...
-      const dop_previous_owner = ownership_asset[seller_ownership_id].date_purchased;
-        //... use the date of purchase to calculate time held ...     
-      const time_held_previous_owner = now - dop_previous_owner;
-        //... update time held in the seller's ownership history asset value: 
-      ownership_asset[seller_ownership_id].time_held := time_held_previous_owner;
-      
         //add the new ownership asset value to the ownership collection
       ledger[s_token_id].l_ownership.add({
 
@@ -578,9 +754,18 @@ entry sell(s_token_id : nat) {
         burden_paid = 0tz
       });
 
-
     }
 }
+
+
+// function get_purchased_price_set(m: map<string, owr>) : set<tez> {
+//   var price_set : set<tez> = [];
+//   for (k, v) in m do
+//     price_set.add(ownership_asset[k].purchase_price);
+//   done;
+//   return price_set
+// }
+
 
 
 // This evenSplit function needs to be replaced with the exponential split

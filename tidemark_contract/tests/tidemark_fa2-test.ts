@@ -357,15 +357,36 @@ describe('[sell] entrypoint', async () => {
     await tidemark_fa2.make_offer(new Nat(1), marketplace_three_address, new Tez(80), {as: collector_one, amount: new Tez(80)})
     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(120), {as: collector_three, amount: new Tez(120)})
     await tidemark_fa2.sell(new Nat(1), {as: collector_two})
-  delay_mockup_now_by_minute(2000)
+  delay_mockup_now_by_minute(5000)
+
+
 
 //OWNER IS NOW COLLECTOR_THREE
+    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(180), {as: collector_one, amount: new Tez(180)})
+    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(230), {as: owner_one, amount: new Tez(230)})
+    await tidemark_fa2.sell(new Nat(1), {as: collector_three})
 
-  const ownership_asset_value = await tidemark_fa2.get_ownership_asset()
-  console.log("ownership_asset_value")
-  console.dir(ownership_asset_value, {depth: null})
-  })
+//OWNER IS NOW OWNER_ONE
+delay_mockup_now_by_minute(50)
+    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(20), {as: collector_one, amount: new Tez(20)})
+    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(500), {as: owner_two, amount: new Tez(220)})
+    await tidemark_fa2.sell(new Nat(1), {as: owner_one})
 
+//OWNER IS NOW OWNER_TWO
+
+const fair_burden_by_id_map_out = await tidemark_fa2.get_fair_burden_by_id_map_out()
+console.log("fair_burden_by_id_map_out")
+for (const arr of fair_burden_by_id_map_out) {
+  console.log(arr[0].toString(), " : ",  tezAsString(arr[1]))
+}
+
+const get_refund_due_out = await tidemark_fa2.get_refund_due_out()
+console.log("get_refund_due_out")
+for (const arr of get_refund_due_out) {
+  console.log(arr[0].toString(), " : ",  tezAsString(arr[1]))
+}
+
+})
 })
 
 function tezMinus(bigSum : Tez, smallSum : Tez) {
@@ -414,3 +435,7 @@ function tezAsString ( input : Tez) {
 //   })
 // })
 
+
+
+
+//completium-cli set binary path archetype
