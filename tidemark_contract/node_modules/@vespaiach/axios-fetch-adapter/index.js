@@ -47,6 +47,19 @@ async function getResponse(request, config) {
     let stageOne;
     try {
         stageOne = await fetch(request);
+        
+        const response = {
+          ok: stageOne.ok,
+          status: stageOne.status,
+          statusText: stageOne.statusText,
+          headers: new Headers(stageOne.headers), // Make a copy of headers
+          config: config,
+          request,
+        }
+
+        if (stageOne.status >= 400) {
+          return createError('Response Error', config, 'ERR_NETWORK', request, response);
+        }
     } catch (e) {
         return createError('Network Error', config, 'ERR_NETWORK', request);
     }

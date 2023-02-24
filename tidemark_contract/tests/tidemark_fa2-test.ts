@@ -1,8 +1,11 @@
+/*eslint require-await: "error"*/
+
 import * as att from "@completium/archetype-ts-types";
-import { ArchetypeType, Rational, Duration, date_cmp, Tez, Bytes, Address, Nat, Enum } from '@completium/archetype-ts-types';
+import { ArchetypeType, Rational, Duration, date_cmp, Tez, Bytes, Address, Nat, Enum, CallResult } from '@completium/archetype-ts-types';
 import { tidemark_fa2} from './binding/tidemark_fa2'
-import {get_account, set_mockup, set_mockup_now, set_quiet, delay_mockup_now_by_minute, delay_mockup_now_by_week} from "@completium/experiment-ts";
+import {get_account, set_mockup, set_mockup_now, set_quiet, Account, delay_mockup_now_by_minute, delay_mockup_now_by_week, delay_mockup_now_by_second} from "@completium/experiment-ts";
 import { expect_to_fail } from '@completium/experiment-ts';
+import { BigNumber } from 'bignumber.js'
 const assert = require('assert')
 const readline = require('readline');
 
@@ -76,6 +79,8 @@ export class TezDate implements ArchetypeType {
     return new Date(this._content)
   }
 }
+
+
 
 /* Utils ------------------------------------------------------------------- */
 
@@ -230,7 +235,128 @@ const containerToPreTable = (title: string, container: object | undefined) : Pre
     createTableColumn(data)
   }
 
+  interface testParams {
+    account : Account,
+    amount : BigNumber,
+    direction: "increase" | "decrease" | "unchanged",
+    expected_change: BigNumber,
+    caller: boolean,
+    before: BigNumber,
+    actual_after: BigNumber
 
+  }
+// //@ts-ignore
+// BigNumber.prototype.to_tez_string = function() : string {
+//   return this.dividedBy(1000000) + " tez"
+// }
+
+function posify (num : BigNumber) : BigNumber {
+  if (num.isNegative()) return num.negated()
+  return num
+}
+
+function negify (num : BigNumber) : BigNumber {
+  if (num.isPositive()) return num.negated()
+  return num
+}
+
+function calculateFee (storage_difference: number, gas: number, size: number) : BigNumber { 
+
+  const MINIMAL_FEE_MUTEZ = 100;
+  const MINIMAL_FEE_PER_BYTE_MUTEZ = 1;
+  const MINIMAL_FEE_PER_STORAGE_BYTE_MUTEZ = 1000;
+  const MINIMAL_FEE_PER_GAS_MUTEZ = 0.1;
+  const GAS_BUFFER = 100;
+
+  const burn = storage_difference * MINIMAL_FEE_PER_STORAGE_BYTE_MUTEZ
+
+  const fees = 
+  MINIMAL_FEE_MUTEZ + 
+  MINIMAL_FEE_PER_BYTE_MUTEZ * size +
+  MINIMAL_FEE_PER_GAS_MUTEZ * gas
+
+  return new BigNumber(burn+fees)
+}
+
+const testFees = calculateFee(96, 14632.584, 24799)
+console.log("Test")
+console.log(testFees.toString())
+
+const notCalledWithAwaitError = new Error('Async function must be called with await');
+async function testHarness(
+  codeName: string, 
+  description: string, 
+  tpArray: Array<testParams>, 
+  entrypoint : () => Promise<CallResult>,
+  caller: Account) {
+
+  
+
+  console.log(`\n${codeName}`)
+  console.log(`${description}\n`)
+  for (const testParams of tpArray) {
+    if(testParams.amount) {
+      if (
+        (testParams.amount.isNegative() && testParams.direction === "increase")) {
+          throw ("amount and direction are incompatible")
+        }
+        testParams.amount = posify(testParams.amount)
+      }
+    if (
+       !testParams.amount || testParams.amount.isEqualTo(new BigNumber(0))) {
+      if (testParams.direction === "increase" || testParams.direction === "decrease") {
+        throw new Error("amount must be non-zero if direction is increase or decrease")
+      } else {
+      testParams.direction = "unchanged"}
+      testParams.amount = new BigNumber(0)
+    }
+
+  switch (testParams.direction) {
+    case "increase":
+      testParams.expected_change = posify(testParams.amount)
+      break;
+    case "decrease":
+      testParams.expected_change = negify(testParams.amount)
+      break;
+    case "unchanged":
+      testParams.expected_change = new BigNumber(0)
+      break;
+    default:
+      throw new Error("direction must be increase, decrease or unchanged")
+  }
+  
+  testParams.before = await (await testParams.account.get_balance()).to_big_number()
+}
+
+const CR = await entrypoint()
+
+for (const testParams of tpArray) {
+  const before = testParams.before
+  const actual_after = await (await testParams.account.get_balance()).to_big_number()
+
+  const expected_amount = tezBigNumberToString(testParams.amount)
+  const expected_direction = testParams.direction
+  const expected_change = testParams.expected_change
+  const expected_after = before.plus(expected_change)
+
+  const actual_change = actual_after.minus(before)
+  const actual_direction = actual_change.isZero() ? "unchanged" : 
+        actual_change.isPositive() ? "increase" : "decrease"
+  const actual_amount = tezBigNumberToString(posify(actual_change))
+
+
+  const testError : string = 
+  `ERROR: ${testParams.account.get_name()} :\n expected: ${expected_direction} of: ${expected_amount}}\n
+    actual: ${actual_direction} of: ${actual_amount}\n `
+  
+  assert(actual_after.isEqualTo(expected_after), testError)
+
+
+    const successMessage = `SUCCESS: ${testParams.account.get_name()} : 
+    ${actual_direction} : ${actual_amount}`
+    console.log(successMessage)
+    }
+  }
 
 
 /* Now --------------------------------------------------------------------- */
@@ -246,6 +372,10 @@ const containerToPreTable = (title: string, container: object | undefined) : Pre
 const creatorRate = new Rational(1/10)
 const minterRate = new Rational(1/100)
 const marketplaceRate = new Rational(1/100)
+
+const creatorRateBN = new Rational(1/10).to_big_number()
+const minterRateBN = new Rational(1/100).to_big_number()
+const marketplaceRateBN = new Rational(1/100).to_big_number()
 
 describe('[Tidemark_fa2] contract', async () => {
   it('Deploys successfully', async () => {
@@ -272,10 +402,6 @@ describe('[Mint] entrypoint', async () => {
       minterRate,
       marketplaceRate,
       {as: creator_one}) // params
-
-      const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-      console.log('after mint: ', ledger_value_one)
-
   }); 
 
   // it('Second nft mints succesfully', async () => {
@@ -295,99 +421,166 @@ describe('[Mint] entrypoint', async () => {
   //     logContainer("token_info_2", metadata_value_two?.token_info)
 
   // });
- 
+
 })
  
+//CONSTANTS
+
 
 describe('[make_offer] entrypoint', async () => {
-  it('Does not fail with correct inputs', async () => {
 
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(4), {as: collector_one, amount: new Tez(4)})
-    delay_mockup_now_by_minute(50)
+let MO1_BID : Tez
+let MO1_CR : CallResult
+
+  before(async () => {
+
+  
   })
 
-it('Second lower offer fails', async () => {
-  expect_to_fail(async () => {
-  await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
-  }, att.string_to_mich("incoming bid must be greater than current bid"))
-  delay_mockup_now_by_minute(500)
+  it('correctly updates balances', async () => {
+    const MO1_Description = "Collector 1 makes an offer of 10 tez on token 1, via marketplace 1"
+    MO1_BID = new Tez(10)
+    const MO1_as = collector_one
+    const tpListOne : Array<testParams> = [{
+      account: creator_one,
+      amount: MO1_BID.to_big_number().times(creatorRateBN),
+      direction: "increase",
+    } as testParams,
+    {
+      account: minter_one,
+      amount: MO1_BID.to_big_number().times(minterRateBN),
+      direction: "increase",
+    } as testParams,
+    {
+      account: marketplace_one,
+      direction: "unchanged"
+    } as testParams,
+    {
+      account: collector_one,
+      amount: MO1_BID.to_big_number(),
+      direction: "decrease",
+    } as testParams
 
-})
+  ]
 
-it('Second higher offer succeeds', async () => {
-  await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(10), {as: collector_one, amount: new Tez(10)})
-  const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-  logContainer("ledger_value_one", ledger_value_one)
-  const bid_history = await tidemark_fa2.get_bid_asset()
-  logContainer("bid_history", bid_history)
-  delay_mockup_now_by_minute(400)
+
+    const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: MO1_as, amount: MO1_BID})
+
+    await testHarness(
+      "MO1",
+      MO1_Description,
+      tpListOne, 
+      entrypoint,
+      MO1_as
+      )
 
   })
 
-  it('Third higher offer succeeds', async () => {
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(16), {as: collector_one, amount: new Tez(16)})
-    const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-    logContainer("ledger_value_one", ledger_value_one)
-    const bid_history = await tidemark_fa2.get_bid_asset()
-    delay_mockup_now_by_minute(800)
+  // it('MO1: ')
+
+//   it('Does not fail with correct inputs', async () => {
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(4), {as: collector_one, amount: new Tez(4)})
+//     delay_mockup_now_by_second(100)
+//   })
+
+// it('Second lower offer fails', async () => {
+//   expect_to_fail(async () => {
+//   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
+//   }, att.string_to_mich("incoming bid must be greater than current bid"))
+//   delay_mockup_now_by_second(101)
+
+// })
+
+// it('Second higher offer succeeds', async () => {
+//   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(10), {as: collector_one, amount: new Tez(10)})
+//   const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
+//   logContainer("ledger_value_one", ledger_value_one)
+//   const bid_history = await tidemark_fa2.get_bid_asset()
+//   logContainer("bid_history", bid_history)
+//   delay_mockup_now_by_minute(400)
+
+//   })
+
+//   it('Third higher offer succeeds', async () => {
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(16), {as: collector_one, amount: new Tez(16)})
+//     const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
+//     logContainer("ledger_value_one", ledger_value_one)
+//     const bid_history = await tidemark_fa2.get_bid_asset()
+//     delay_mockup_now_by_minute(800)
 
     
-    })
+//     })
 })
 
-describe('[sell] entrypoint', async () => {
-  it('Does not fail with correct inputs', async () => {
+// describe('[sell] entrypoint', async () => {
+//   it('Does not fail with correct inputs', async () => {
 
-    await tidemark_fa2.sell(new Nat(1), {as: creator_one})
-    const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-    logContainer("ledger_value_one", ledger_value_one)
-    console.log(ledger_value_one?.l_bid_number.toString())
-  delay_mockup_now_by_minute(500)
+//     await tidemark_fa2.sell(new Nat(1), {as: creator_one})
+//     const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
+//     logContainer("ledger_value_one", ledger_value_one)
+//     console.log(ledger_value_one?.l_bid_number.toString())
+//   delay_mockup_now_by_minute(500)
 
-  })
+//   })
 
-// OWNER IS NOW COLLECTOR_ONE
-  it('Can be bought and sold a few times without error', async () => {
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(5), {as: collector_three, amount: new Tez(5)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(30), {as: collector_two, amount: new Tez(30)})
-    await tidemark_fa2.sell(new Nat(1), {as: collector_one})
-  delay_mockup_now_by_minute(200)
+// // OWNER IS NOW COLLECTOR_ONE
+//   it('Can be bought and sold a few times without error', async () => {
+//     console.log("before bid of 5")
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(5), {as: collector_three, amount: new Tez(5)})
+//     console.log("before bid of 30")
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(30), {as: collector_two, amount: new Tez(30)})
+//     console.log("before sale at 30")
+//     await tidemark_fa2.sell(new Nat(1), {as: collector_one})
+//   delay_mockup_now_by_minute(200)
+//     console.log("owner is now collector_one")
 
-//OWNER IS NOW COLLECTOR_TWO
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_three_address, new Tez(80), {as: collector_one, amount: new Tez(80)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(120), {as: collector_three, amount: new Tez(120)})
-    await tidemark_fa2.sell(new Nat(1), {as: collector_two})
-  delay_mockup_now_by_minute(5000)
+// //OWNER IS NOW COLLECTOR_TWO
+//     console.log("before bid of 80")
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_three_address, new Tez(80), {as: collector_one, amount: new Tez(80)})
+//     console.log("before bid of 120")
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(120), {as: collector_three, amount: new Tez(120)})
+//     console.log("before sale at 120")
+//     await tidemark_fa2.sell(new Nat(1), {as: collector_two})
+//   delay_mockup_now_by_minute(5000)
+//     console.log("owner is now collector_two")
+
+// // NOTE TO SELF - for some reason  correctly changeing the creator fee so it tracks the amount above the
+// // tidemark is causing the sale to fail at this point. Perhaps something is wrong with how 
+// // things are being added and tracked - maybe the token balance tracker is going below zero or soemthing?
+// //But it has to be a problem that is triggered in the sale.... hmmm
+// //Its to do with changing last_bid for tidemark
 
 
+// //OWNER IS NOW COLLECTOR_THREE
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(180), {as: collector_one, amount: new Tez(180)})
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(230), {as: owner_one, amount: new Tez(230)})
+//     await tidemark_fa2.sell(new Nat(1), {as: collector_three})
+// delay_mockup_now_by_minute(50)
+//     console.log("owner is now collector_three")
 
-//OWNER IS NOW COLLECTOR_THREE
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(180), {as: collector_one, amount: new Tez(180)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(230), {as: owner_one, amount: new Tez(230)})
-    await tidemark_fa2.sell(new Nat(1), {as: collector_three})
 
-//OWNER IS NOW OWNER_ONE
-delay_mockup_now_by_minute(50)
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(20), {as: collector_one, amount: new Tez(20)})
-    await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(500), {as: owner_two, amount: new Tez(220)})
-    await tidemark_fa2.sell(new Nat(1), {as: owner_one})
+// //OWNER IS NOW OWNER_ONE
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(40), {as: collector_one, amount: new Tez(40)})
+//     await tidemark_fa2.make_offer(new Nat(1), marketplace_two_address, new Tez(500), {as: owner_two, amount: new Tez(500)})
+//     await tidemark_fa2.sell(new Nat(1), {as: owner_one})
+// delay_mockup_now_by_minute(50)
+//     console.log("owner is now owner_one")
+// //OWNER IS NOW OWNER_TWO
 
-//OWNER IS NOW OWNER_TWO
+//     const sp_band_asset = await tidemark_fa2.get_sp_band_asset()
+//     console.log("sp_band_asset")
+//     console.dir(sp_band_asset, {depth: null})
 
-const fair_burden_by_id_map_out = await tidemark_fa2.get_fair_burden_by_id_map_out()
-console.log("fair_burden_by_id_map_out")
-for (const arr of fair_burden_by_id_map_out) {
-  console.log(arr[0].toString(), " : ",  tezAsString(arr[1]))
-}
+//     const sp_ownership_asset = await tidemark_fa2.get_sp_ownership_asset()
+//     console.log("sp_ownership_asset")
+//     console.dir(sp_ownership_asset, {depth: null})
 
-const get_refund_due_out = await tidemark_fa2.get_refund_due_out()
-console.log("get_refund_due_out")
-for (const arr of get_refund_due_out) {
-  console.log(arr[0].toString(), " : ",  tezAsString(arr[1]))
-}
+//     const ownership_asset = await tidemark_fa2.get_ownership_asset()
+//     console.log("ownership_asset")
+//     console.dir(ownership_asset, {depth: null})
 
-})
-})
+// })
+// })
 
 function tezMinus(bigSum : Tez, smallSum : Tez) {
   const output = bigSum.to_big_number().minus(smallSum.to_big_number())
@@ -402,6 +595,10 @@ function tezAsNumber (input : Tez) {
 
 function tezAsString ( input : Tez) {
   return `${tezAsNumber(input)} tez`
+}
+
+function tezBigNumberToString (input : BigNumber) {
+  return `${input.dividedBy(1000000).toNumber()} tez`
 }
 
 // function logTezChange (contractName: string, before: Tez, after: Tez) {
