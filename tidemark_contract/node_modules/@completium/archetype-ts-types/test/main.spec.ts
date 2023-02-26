@@ -1,5 +1,5 @@
 import BigNumber from 'bignumber.js';
-import { Address, Chain_id, Duration, Key, Micheline, Mstring, Nat, Rational, Signature, Ticket, Key_hash, micheline_equals, UnsafeMicheline, replace_var } from '../src/main'
+import { Address, Chain_id, Duration, Key, Micheline, Mstring, Nat, Rational, Signature, Ticket, Key_hash, micheline_equals, UnsafeMicheline, replace_var, Tez } from '../src/main'
 
 describe('Micheline', () => {
   test('int int true', () => {
@@ -357,6 +357,55 @@ describe('ArchetypeType', () => {
     });
 
   })
+
+  describe('Tez', () => {
+
+    test('Fails with empty string', () => {
+      const input = ""
+      expect(() => { new Tez(input) }).toThrow("Invalid Tez value")
+    })
+
+    test('Fails with text string', () => {
+      const input = "abc"
+      expect(() => { new Tez(input) }).toThrow("Invalid Tez value")
+    })
+
+    test('Succeeds with numerical string ', () => {
+      const input = "123"
+      expect(new Tez(input).toString()).toEqual("123000000")
+    })
+    
+    describe('toString', () => {
+      test('Succeeds with numerical string ', () => {
+        const input = "123"
+        expect(new Tez(input).toString("tez")).toEqual("123")
+      })
+    })  
+
+    test('Succeeds with numerical string ', () => {
+      const input = "123123123"
+      expect(new Tez(input, "mutez").toString("tez")).toEqual("123.123123")
+      console.log(new Tez(input, "mutez").toString("tez"))
+    })
+
+    describe('Minus', () => {
+      test('Succeeds with positive result', () => {
+        const minuend = 10
+        const subtrahend = 9
+        const difference = minuend-subtrahend
+        expect(new Tez(minuend).minus(new Tez(subtrahend)).equals(new Tez(difference))).toBe(true)
+      })
+
+      test('Fails with negative result', () => {
+        const minuend = 10
+        const subtrahend = 11
+        const difference = minuend-subtrahend
+        expect(() => {new Tez(minuend).minus(new Tez(subtrahend)).equals(new Tez(difference))}).toThrow("Tez value must not be negative")
+      })
+
+    })
+
+  });
 
   describe('Signature', () => {
     test('Fails with empty string', () => {

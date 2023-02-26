@@ -1,4 +1,4 @@
-/*eslint require-await: "error"*/
+
 
 import * as att from "@completium/archetype-ts-types";
 import { ArchetypeType, Rational, Duration, date_cmp, Tez, Bytes, Address, Nat, Enum, CallResult } from '@completium/archetype-ts-types';
@@ -8,8 +8,6 @@ import { expect_to_fail } from '@completium/experiment-ts';
 import { BigNumber } from 'bignumber.js'
 const assert = require('assert')
 const readline = require('readline');
-
-
 /* Accounts ---------------------------------------------------------------- */
 
 const creator_one = get_account('creator_one')
@@ -85,170 +83,23 @@ export class TezDate implements ArchetypeType {
 /* Utils ------------------------------------------------------------------- */
 
 
-type prims = string | TezDate | Tez | Duration | Date | Rational | Address | Nat | Bytes 
-type PreTable = Array<{[key:string] : string}>
-type StringArray = Array<string>
-
-
-function isPrims(value: any): value is prims {
-  return (
-  typeof value === 'string' ||
-  value instanceof TezDate ||
-  value instanceof Tez ||
-  value instanceof Duration ||
-  value instanceof Date ||
-  value instanceof Rational ||
-  value instanceof Address ||
-  value instanceof Nat ||
-  value instanceof Bytes
-  )}
-
-const valAsString = 
-(val : prims) => {
-    if (typeof val === 'string') {
-      return val 
-    } else {
-    return val.toString()
-  }
-} 
-
-const varNameToString = (varObj: any) => Object.keys(varObj)[0]
-
-const logPrim = (input : any) => {
-  if (input === undefined) {
-    console.log(`the input is undefined and cannot be printed`)
-  } else if (isPrims(input)) {
-    console.log (`${varNameToString} : ${valAsString(input)} : ${input.constructor.name}`)
-  } else {
-    console.log(`the input is not a prims. It is a: ${input.constructor.name} \n ${input}`)
-}
-}
-
-
-const containerToPreTable = (title: string, container: object | undefined) : PreTable => {
-
-  if (container === undefined) { 
-    console.log ("the container is undefined and cannot be printed"); 
-    return []
-  }
-  let data: PreTable = []
-
-  if (container instanceof Array<[prims]>) {
-    console.log(`\n${title} : Map\n`)
-    data = container.map((arr) => {
-      return {
-        [arr[0].constructor.name]: valAsString(arr[0]),
-        [arr[1].constructor.name]: valAsString(arr[1])
-      }
-    })
-  } else {
-    console.log(`\n${title} : ${container.constructor.name}\n`)
-
-      for (const [key, value] of Object.entries(container)) {
-        // if value is of the prims type then print it as a string, else print the type nam
-      
-        if (isPrims(value)) {
-          data.push({name: key, value: valAsString(value), class: value.constructor.name})
-        } else if (value instanceof Enum) {
-          data.push({name: key, value: `${valAsString(value.type())} (type)` , class: "Enum"})
-        } else if (value instanceof Array) {
-          data.push({name: key, value: `Array type` , class: "Array (map, bigmap)"})
-          data.push({name: key, value: `${value.constructor.name}` , class: "bid_history_value"})
-        } else {
-          data.push({name: key, value: 'unknown type', class: `${value.constructor.name}`})
-        }
-      }
-    }
-  return data
-  }
-
-  const createTableColumn = (data: PreTable) => {
-  
-  const areKeysSame = (data: PreTable) => {
-    let keys = new Set()
-    for (const obj of data) {
-      const objKeys = Object.keys(obj)
-      for (const key of objKeys) {
-        keys.add(key)
-      }
-    }
-    return (keys.size === Object.keys(data[0]).length)
-  }
-  
-  try {
-    assert(areKeysSame(data), `the keys are not the same`)
-  } catch(err) {
-    console.error(err)
-  }
-   
-  const stringMatrix = Object.keys(data[0]).map(key => {
-    let arr : StringArray = []
-    for (const obj  of data) {
-      arr.push(obj[key])
-    } 
-    return [key].concat(arr)
-  })
-  
-  const transposeMatrix = (matrix: string[][]): string[][] =>
-  matrix[0].map((_, i) => matrix.map(row => row[i]));
-  
-  const prepArray = (arr: StringArray, maxLength:number = 30) => {
-    const limitLength = (str: string) => 
-      str.length > maxLength ? str.substring(0, maxLength - 3) + `... ${str.length}}` : str
-    
-    const arrLimited = arr.map(item => limitLength(item))
-    
-    const minLength = arrLimited.reduce((acc, curr) => {
-    return Math.max(acc, curr.length)}, 0)
-  
-    const arrPadded = arrLimited.map(item => item.padEnd(minLength))
-    return arrPadded
-  
-  }
-  
-  const preppedMatrix = stringMatrix.map(arr => prepArray(arr))
-  
-  const transposedMatrix = transposeMatrix(preppedMatrix)
-  
-  const borders = Array(transposedMatrix.length).fill('|')
-  const intersperse = (inter: any[], arr: any[]) =>
-  arr.reduce((acc, cur, i) => acc.concat([inter[i], cur]), []);
-  
-  const addLine = (matrix: string[][]): string[][] => {
-    const firstRow = matrix[0]
-    const spacedRow = firstRow.map(str => str.replace(/[^|]/g, " "))
-    const linedRow = spacedRow.map(str => str.replace(/ /g, "-"))
-    matrix.splice(1,0, linedRow)
-    return matrix
-  }
-  
-  const penultimateMatrix = transposedMatrix.map(arr => intersperse(borders, arr).concat('|'))
-  const finalMatrix = addLine(penultimateMatrix)
-  
-  for (const arr of finalMatrix) {
-    console.log(arr.join(' '))
-  }  
-  }
-  
-  function logContainer(title : string, container: object | undefined) {
-    const data = containerToPreTable(title, container)
-    createTableColumn(data)
-  }
 
   interface testParams {
+    description: string,
     account : Account,
     amount : BigNumber,
     direction: "increase" | "decrease" | "unchanged",
     expected_change: BigNumber,
     caller: boolean,
     before: BigNumber,
-    actual_after: BigNumber
+    actual_after: BigNumber,
+    expected_after: BigNumber,
+    error_message: string
+    info_message: string,
+    cost: BigNumber
 
   }
-// //@ts-ignore
-// BigNumber.prototype.to_tez_string = function() : string {
-//   return this.dividedBy(1000000) + " tez"
-// }
+
 
 function posify (num : BigNumber) : BigNumber {
   if (num.isNegative()) return num.negated()
@@ -259,42 +110,23 @@ function negify (num : BigNumber) : BigNumber {
   if (num.isPositive()) return num.negated()
   return num
 }
-
-function calculateFee (storage_difference: number, gas: number, size: number) : BigNumber { 
-
-  const MINIMAL_FEE_MUTEZ = 100;
-  const MINIMAL_FEE_PER_BYTE_MUTEZ = 1;
-  const MINIMAL_FEE_PER_STORAGE_BYTE_MUTEZ = 1000;
-  const MINIMAL_FEE_PER_GAS_MUTEZ = 0.1;
-  const GAS_BUFFER = 100;
-
-  const burn = storage_difference * MINIMAL_FEE_PER_STORAGE_BYTE_MUTEZ
-
-  const fees = 
-  MINIMAL_FEE_MUTEZ + 
-  MINIMAL_FEE_PER_BYTE_MUTEZ * size +
-  MINIMAL_FEE_PER_GAS_MUTEZ * gas
-
-  return new BigNumber(burn+fees)
+// with_cost function provides the cost of a transaction
+const with_cost = async (f : { () : Promise<any> }, caller : Account) : Promise<BigNumber> => {
+  const balance_before = await caller.get_balance();
+  const res = await f();
+  const balance_after = await caller.get_balance();
+  return balance_before.to_big_number().minus(balance_after.to_big_number());
 }
 
-const testFees = calculateFee(96, 14632.584, 24799)
-console.log("Test")
-console.log(testFees.toString())
-
-const notCalledWithAwaitError = new Error('Async function must be called with await');
-async function testHarness(
-  codeName: string, 
-  description: string, 
+ async function generate_test_params_array(
+  description: string,
   tpArray: Array<testParams>, 
-  entrypoint : () => Promise<CallResult>,
-  caller: Account) {
+  caller: Account,
+  entrypoint : () => Promise<CallResult>
+  ) : Promise<testParams[]> {
 
-  
-
-  console.log(`\n${codeName}`)
-  console.log(`${description}\n`)
   for (const testParams of tpArray) {
+    
     if(testParams.amount) {
       if (
         (testParams.amount.isNegative() && testParams.direction === "increase")) {
@@ -311,6 +143,7 @@ async function testHarness(
       testParams.amount = new BigNumber(0)
     }
 
+
   switch (testParams.direction) {
     case "increase":
       testParams.expected_change = posify(testParams.amount)
@@ -324,38 +157,52 @@ async function testHarness(
     default:
       throw new Error("direction must be increase, decrease or unchanged")
   }
-  
-  testParams.before = await (await testParams.account.get_balance()).to_big_number()
+  testParams.before = (await testParams.account.get_balance()).to_big_number()
 }
+// const CR = await entrypoint()
+let callerTotalSpent = await with_cost(entrypoint, caller)
 
-const CR = await entrypoint()
+for (const tp of tpArray) {
+  
+  const before = tp.before
+  const actual_after = await (await tp.account.get_balance()).to_big_number()
+  
+  const expected_degree = new Tez(tp.amount, 'mutez').toString('tez')
+  const expected_direction = tp.direction
+  const expected_change = tp.expected_change
+  tp.cost = tp.caller ? callerTotalSpent.plus(expected_change) : new BigNumber(0)
+  const expected_after = before.plus(expected_change).minus(tp.cost)
 
-for (const testParams of tpArray) {
-  const before = testParams.before
-  const actual_after = await (await testParams.account.get_balance()).to_big_number()
-
-  const expected_amount = tezBigNumberToString(testParams.amount)
-  const expected_direction = testParams.direction
-  const expected_change = testParams.expected_change
-  const expected_after = before.plus(expected_change)
 
   const actual_change = actual_after.minus(before)
   const actual_direction = actual_change.isZero() ? "unchanged" : 
         actual_change.isPositive() ? "increase" : "decrease"
-  const actual_amount = tezBigNumberToString(posify(actual_change))
-
+  const actual_amount = new Tez(posify(actual_change), 'mutez').toString('tez')
 
   const testError : string = 
-  `ERROR: ${testParams.account.get_name()} :\n expected: ${expected_direction} of: ${expected_amount}}\n
+  `ERROR: ${tp.account.get_name()} :\n expected: ${expected_direction} of: ${expected_degree}}\n
     actual: ${actual_direction} of: ${actual_amount}\n `
-  
-  assert(actual_after.isEqualTo(expected_after), testError)
+  tp.error_message = testError
+
+  // if (!tp.caller) { 
+    tp.actual_after = actual_after
+    tp.expected_after = expected_after
 
 
-    const successMessage = `SUCCESS: ${testParams.account.get_name()} : 
-    ${actual_direction} : ${actual_amount}`
-    console.log(successMessage)
-    }
+    // assert(actual_after.isEqualTo(expected_after), testError) 
+  // } else {
+  //   assert(actual_after.isLessThan(expected_after), testError)
+  //   const apparent_gas_cost = expected_after.minus(actual_after)
+  //   assert(apparent_gas_cost.isLessThan(new BigNumber(0.0000005)),
+  //  `apparent gas cost is suspiciously high: " + ${tezBigNumberToString(apparent_gas_cost)}\n
+  //  entrypoint: ${entrypoint}\n
+  //  caller: ${tp.account.get_name()}\n`)
+  //   }
+
+    const successMessage = `${tp.account.get_name()} : ${actual_direction} : ${actual_amount}`
+    tp.info_message = successMessage
+  }
+  return tpArray
   }
 
 
@@ -385,7 +232,6 @@ describe('[Tidemark_fa2] contract', async () => {
       creator_one_address,
       minter_one_address,
       {}) // params
-    
   });
 
 })
@@ -402,7 +248,8 @@ describe('[Mint] entrypoint', async () => {
       minterRate,
       marketplaceRate,
       {as: creator_one}) // params
-  }); 
+
+    }); 
 
   // it('Second nft mints succesfully', async () => {
 
@@ -427,90 +274,196 @@ describe('[Mint] entrypoint', async () => {
 //CONSTANTS
 
 
-describe('[make_offer] entrypoint', async () => {
 
-let MO1_BID : Tez
-let MO1_CR : CallResult
+describe('[Make Offer] 1', async () => {
 
-  before(async () => {
-
-  
-  })
-
-  it('correctly updates balances', async () => {
-    const MO1_Description = "Collector 1 makes an offer of 10 tez on token 1, via marketplace 1"
-    MO1_BID = new Tez(10)
-    const MO1_as = collector_one
-    const tpListOne : Array<testParams> = [{
-      account: creator_one,
-      amount: MO1_BID.to_big_number().times(creatorRateBN),
-      direction: "increase",
-    } as testParams,
-    {
-      account: minter_one,
-      amount: MO1_BID.to_big_number().times(minterRateBN),
-      direction: "increase",
-    } as testParams,
-    {
-      account: marketplace_one,
-      direction: "unchanged"
-    } as testParams,
-    {
-      account: collector_one,
-      amount: MO1_BID.to_big_number(),
-      direction: "decrease",
-    } as testParams
-
+  let description : string = "workds"
+  const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: collector_one, amount: MO1_BID})
+  let MO1_BID : Tez = new Tez(10)
+  let tpListOne : Array<testParams> = [{
+    description: "creator_one recieves 1/10 of bid as creator_fee",
+    account: creator_one,
+    amount: MO1_BID.to_big_number().times(creatorRateBN),
+    direction: "increase",
+  } as testParams,
+  {
+    description: "minter_one recieves 1/100 of bid as minter_fee",
+    account: minter_one,
+    amount: MO1_BID.to_big_number().times(minterRateBN),
+    direction: "increase",
+  } as testParams,
+  {
+    description: "marketplace_one recieves no fee",
+    account: marketplace_one,
+    direction: "unchanged"
+  } as testParams,
+  {
+    description: "collector_one pays bid",
+    account: collector_one,
+    amount: MO1_BID.to_big_number(),
+    direction: "decrease",
+    caller: true
+  } as testParams
   ]
 
+before(async function() {
+  //NOTE that this before block is actually being run AFTER tpList and then the it blocks are defined,
+  //but BEFORE the actual content of the it blocks are run
+tpListOne = await generate_test_params_array(
+  description,
+  tpListOne,
+  collector_one, 
+  entrypoint)
+//   let MO1_BID : Tez
+//   let MO1_CR : CallResult
+//   MO1_BID = new Tez(11)
+//   description = "works"
+//    thingo = await magicFunc(entrypoint)  
+//    thingoZero = {} as testObj
 
-    const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: MO1_as, amount: MO1_BID})
+})
 
-    await testHarness(
-      "MO1",
-      MO1_Description,
-      tpListOne, 
-      entrypoint,
-      MO1_as
-      )
 
-  })
+for (const tp of tpListOne) {
+it(`${tp.description}`, async function() {
+  this.tp = tp
+  
+         assert(tp.actual_after.isEqualTo(tp.expected_after), tp.error_message) 
 
-  // it('MO1: ')
+    })
 
-//   it('Does not fail with correct inputs', async () => {
-//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(4), {as: collector_one, amount: new Tez(4)})
-//     delay_mockup_now_by_second(100)
+  }
+
+afterEach(async function() {
+  if (this.tp && this.tp.info_message) {
+    console.log(this.tp.info_message)
+  }
+
+})
+
+})
+// describe('[make_offer] entrypoint', async () => {
+
+// let MO1_BID : Tez
+// let MO1_CR : CallResult
+
+// // const MO1_Description = "Collector 1 makes an offer of 10 tez on token 1, via marketplace 1"
+// // MO1_BID = new Tez(10)
+// // const MO1_as = collector_one
+// // const tpListOne : Array<testParams> = [{
+// //   account: creator_one,
+// //   amount: MO1_BID.to_big_number().times(creatorRateBN),
+// //   direction: "increase",
+// // } as testParams,
+// // {
+// //   account: minter_one,
+// //   amount: MO1_BID.to_big_number().times(minterRateBN),
+// //   direction: "increase",
+// // } as testParams,
+// // {
+// //   account: marketplace_one,
+// //   direction: "unchanged"
+// // } as testParams,
+// // {
+// //   account: collector_one,
+// //   amount: MO1_BID.to_big_number(),
+// //   direction: "decrease",
+// //   caller: true
+// // } as testParams
+
+// // ]
+
+
+// // const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: MO1_as, amount: MO1_BID})
+
+// // await generate_test_params_array(
+// //   "MO1",
+// //   MO1_Description,
+// //   tpListOne, 
+// //   entrypoint
+// //   )
+
+// //   before(async () => {
+
+  
+// //   })
+
+//   it('correctly updates balances', async () => {
+//     const MO1_Description = "Collector 1 makes an offer of 10 tez on token 1, via marketplace 1"
+//     MO1_BID = new Tez(10)
+//     const MO1_as = collector_one
+//     const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: MO1_as, amount: MO1_BID})
+    
+//     const tpListOne : Array<testParams> = [{
+//       account: creator_one,
+//       amount: MO1_BID.to_big_number().times(creatorRateBN),
+//       direction: "increase",
+//     } as testParams,
+//     {
+//       account: minter_one,
+//       amount: MO1_BID.to_big_number().times(minterRateBN),
+//       direction: "increase",
+//     } as testParams,
+//     {
+//       account: marketplace_one,
+//       direction: "unchanged"
+//     } as testParams,
+//     {
+//       account: collector_one,
+//       amount: MO1_BID.to_big_number(),
+//       direction: "decrease",
+//       caller: true
+//     } as testParams
+//   ]
+
+
+
+//     await generate_test_params_array(
+//       "MO1",
+//       MO1_Description,
+//       tpListOne, 
+//       entrypoint
+//       )
+//       it('doers another thing', async () => {
+//         assert(true)
+//       })
 //   })
 
-// it('Second lower offer fails', async () => {
-//   expect_to_fail(async () => {
-//   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
-//   }, att.string_to_mich("incoming bid must be greater than current bid"))
-//   delay_mockup_now_by_second(101)
+//   // it('MO1: ')
 
-// })
+// //   it('Does not fail with correct inputs', async () => {
+// //     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(4), {as: collector_one, amount: new Tez(4)})
+// //     delay_mockup_now_by_second(100)
+// //   })
 
-// it('Second higher offer succeeds', async () => {
-//   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(10), {as: collector_one, amount: new Tez(10)})
-//   const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-//   logContainer("ledger_value_one", ledger_value_one)
-//   const bid_history = await tidemark_fa2.get_bid_asset()
-//   logContainer("bid_history", bid_history)
-//   delay_mockup_now_by_minute(400)
+// // it('Second lower offer fails', async () => {
+// //   expect_to_fail(async () => {
+// //   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
+// //   }, att.string_to_mich("incoming bid must be greater than current bid"))
+// //   delay_mockup_now_by_second(101)
 
-//   })
+// // })
 
-//   it('Third higher offer succeeds', async () => {
-//     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(16), {as: collector_one, amount: new Tez(16)})
-//     const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
-//     logContainer("ledger_value_one", ledger_value_one)
-//     const bid_history = await tidemark_fa2.get_bid_asset()
-//     delay_mockup_now_by_minute(800)
+// // it('Second higher offer succeeds', async () => {
+// //   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(10), {as: collector_one, amount: new Tez(10)})
+// //   const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
+// //   logContainer("ledger_value_one", ledger_value_one)
+// //   const bid_history = await tidemark_fa2.get_bid_asset()
+// //   logContainer("bid_history", bid_history)
+// //   delay_mockup_now_by_minute(400)
+
+// //   })
+
+// //   it('Third higher offer succeeds', async () => {
+// //     await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(16), {as: collector_one, amount: new Tez(16)})
+// //     const ledger_value_one = await tidemark_fa2.get_ledger_value(new Nat(1))
+// //     logContainer("ledger_value_one", ledger_value_one)
+// //     const bid_history = await tidemark_fa2.get_bid_asset()
+// //     delay_mockup_now_by_minute(800)
 
     
-//     })
-})
+// //     })
+// })
 
 // describe('[sell] entrypoint', async () => {
 //   it('Does not fail with correct inputs', async () => {
@@ -598,6 +551,8 @@ function tezAsString ( input : Tez) {
 }
 
 function tezBigNumberToString (input : BigNumber) {
+  if (input === new BigNumber(0)) return `0 tez`
+  if (input < new BigNumber(0) || !input) throw Error (`tezBigNumberToString input of ${input} is invalid.`)
   return `${input.dividedBy(1000000).toNumber()} tez`
 }
 
