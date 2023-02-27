@@ -448,9 +448,6 @@ entry make_offer(
       const token_ledger ?= ledger[mo_token_id];
       const last_bid_number = token_ledger.l_bid_number;
       const last_bid_asset_id = make_bid_id(mo_token_id, last_bid_number);
-      // if mo_bid = 5tz then begin
-      //   fail(("last_bid_asset_id", last_bid_asset_id))
-      // end;
       const last_bid_asset_value ?= bid_asset[last_bid_asset_id];
 
       const last_bid = last_bid_asset_value.bid;
@@ -484,7 +481,7 @@ entry make_offer(
       ledger[mo_token_id].l_creator_fee_paid_since_last_sale += creator_fee;
       transfer minter_fee to minter;
       mo_token_balance_tracker -= minter_fee;
-      tidemark := transferred;
+      ledger[mo_token_id].l_tidemark := transferred;
     end;
 
     //update the bid number locally
@@ -531,7 +528,6 @@ entry sell(s_token_id : nat) {
       // updte owner_number on token ledger asset value
       const owner_number_after_sale = owner_number_before_sale + 1;
       ledger[s_token_id].l_owner_number := owner_number_after_sale;
-        // if winning_bid = 120tz then fail("fail point 1");
       
       // Get seller ownership id into local variable
       const seller_ownership_id = make_ownership_id(s_token_id, owner_number_before_sale);
@@ -549,7 +545,6 @@ entry sell(s_token_id : nat) {
      
       // Calculate what each marketplace is due
       // TODO: Update this to use exponential split with global constant
-        // if winning_bid = 120tz then fail("fail point 2");
 
       const splitMap: map<nat, tez> = evenSplit(marketplace_fee, bids_above_zero);
 
@@ -636,7 +631,6 @@ entry sell(s_token_id : nat) {
         done;
         const fair_burden_this_id = sp_ownership_asset[id].sp_fair_burden;
         const burden_contributed_this_id = sp_ownership_asset[id].sp_burden_contributed;
-        if (winning_bid = 120tz and id = "t1|o2") then fail(("burden_contributed_this_id", burden_contributed_this_id, "fair_burden_this_id", fair_burden_this_id));
         const refund_owed = burden_contributed_this_id - fair_burden_this_id;
         refund_owed_list.prepend(refund_owed);
 
