@@ -3,7 +3,7 @@
 import * as att from "@completium/archetype-ts-types";
 import { ArchetypeType, Rational, Duration, date_cmp, Tez, Bytes, Address, Nat, Enum, CallResult } from '@completium/archetype-ts-types';
 import { tidemark_fa2} from './binding/tidemark_fa2'
-import {get_account, set_mockup, set_mockup_now, set_quiet, Account, delay_mockup_now_by_minute, delay_mockup_now_by_week, delay_mockup_now_by_second} from "@completium/experiment-ts";
+import {get_account, set_mockup, set_mockup_now, set_quiet, Account, Parameters, delay_mockup_now_by_minute, delay_mockup_now_by_week, delay_mockup_now_by_second} from "@completium/experiment-ts";
 import { expect_to_fail } from '@completium/experiment-ts';
 import { BigNumber } from 'bignumber.js'
 const assert = require('assert')
@@ -87,11 +87,10 @@ export class TezDate implements ArchetypeType {
   interface testParams {
     description: string,
     account : Account,
-    amount : BigNumber,
-    direction: "increase" | "decrease" | "unchanged",
     expected_change: BigNumber,
-    caller: boolean,
-    before: BigNumber,
+    expected_direction: "increase" | "decrease" | "unchanged",
+    expected_amount: string,
+    actual_before: BigNumber,
     actual_after: BigNumber,
     expected_after: BigNumber,
     error_message: string
@@ -111,80 +110,57 @@ function negify (num : BigNumber) : BigNumber {
   return num
 }
 // with_cost function provides the cost of a transaction
-const with_cost = async (f : { () : Promise<any> }, caller : Account) : Promise<BigNumber> => {
-  const balance_before = await caller.get_balance();
-  const res = await f();
-  const balance_after = await caller.get_balance();
+const with_cost = async (f : { (call_params : Parameters) : Promise<any> }, call_params: Parameters) : Promise<BigNumber> => {
+  const balance_before = await call_params.as.get_balance();
+  const res = await f(call_params);
+  const balance_after = await call_params.as.get_balance();
   return balance_before.to_big_number().minus(balance_after.to_big_number());
 }
 
  async function generate_test_params_array(
   description: string,
-  tpArray: Array<testParams>, 
-  caller: Account,
-  entrypoint : () => Promise<CallResult>
+  tpArray: Array<testParams>,
+  call_params: Parameters,
+
+  entrypoint : (call_params: Parameters) => Promise<CallResult>
   ) : Promise<testParams[]> {
 
-  for (const testParams of tpArray) {
-    
-    if(testParams.amount) {
-      if (
-        (testParams.amount.isNegative() && testParams.direction === "increase")) {
-          throw ("amount and direction are incompatible")
-        }
-        testParams.amount = posify(testParams.amount)
-      }
-    if (
-       !testParams.amount || testParams.amount.isEqualTo(new BigNumber(0))) {
-      if (testParams.direction === "increase" || testParams.direction === "decrease") {
-        throw new Error("amount must be non-zero if direction is increase or decrease")
-      } else {
-      testParams.direction = "unchanged"}
-      testParams.amount = new BigNumber(0)
-    }
-
-
-  switch (testParams.direction) {
-    case "increase":
-      testParams.expected_change = posify(testParams.amount)
-      break;
-    case "decrease":
-      testParams.expected_change = negify(testParams.amount)
-      break;
-    case "unchanged":
-      testParams.expected_change = new BigNumber(0)
-      break;
-    default:
-      throw new Error("direction must be increase, decrease or unchanged")
-  }
-  testParams.before = (await testParams.account.get_balance()).to_big_number()
+  for (const tp of tpArray) {
+    tp.expected_change = new BigNumber(tp.expected_change).times(1000000)
+  tp.actual_before = (await tp.account.get_balance()).to_big_number()
+  tp.expected_direction = tp.expected_change.isZero() ? "unchanged" : 
+  tp.expected_change.isPositive() ? "increase" : "decrease"
+  tp.expected_amount = new Tez(posify(tp.expected_change), 'mutez').toString('tez')
 }
 // const CR = await entrypoint()
-let callerTotalSpent = await with_cost(entrypoint, caller)
+let callerTotalSpent = await with_cost(entrypoint, call_params)
 
 for (const tp of tpArray) {
   
-  const before = tp.before
+  const actual_before = tp.actual_before
   const actual_after = await (await tp.account.get_balance()).to_big_number()
   
-  const expected_degree = new Tez(tp.amount, 'mutez').toString('tez')
-  const expected_direction = tp.direction
-  const expected_change = tp.expected_change
-  tp.cost = tp.caller ? callerTotalSpent.plus(expected_change) : new BigNumber(0)
-  const expected_after = before.plus(expected_change).minus(tp.cost)
+  tp.cost = tp.account === call_params.as ? callerTotalSpent.minus(posify(tp.expected_change)) : new BigNumber(0)
+  const expected_after = actual_before.plus(tp.expected_change).minus(tp.cost)
+  if (tp.account === call_params.as) {
+  console.log("tp.cost", tp.cost.toString())
 
+  }
 
-  const actual_change = actual_after.minus(before)
+  const actual_change = actual_after.minus(actual_before)
   const actual_direction = actual_change.isZero() ? "unchanged" : 
         actual_change.isPositive() ? "increase" : "decrease"
   const actual_amount = new Tez(posify(actual_change), 'mutez').toString('tez')
 
   const testError : string = 
-  `ERROR: ${tp.account.get_name()} :\n expected: ${expected_direction} of: ${expected_degree}}\n
-    actual: ${actual_direction} of: ${actual_amount}\n `
+  `ERROR: ${tp.account.get_name()} :
+   expected_after: ${expected_after}
+   actual_after: ${actual_after}
+   expected: ${tp.expected_direction} by ${tp.expected_amount}
+   actual: ${actual_direction} by ${actual_amount}
+   `
   tp.error_message = testError
 
-  // if (!tp.caller) { 
     tp.actual_after = actual_after
     tp.expected_after = expected_after
 
@@ -201,6 +177,9 @@ for (const tp of tpArray) {
 
     const successMessage = `${tp.account.get_name()} : ${actual_direction} : ${actual_amount}`
     tp.info_message = successMessage
+      if (tp.account.get_address() === call_params.as.get_address()) {
+        tp.info_message.concat(`\n apparent cost: tp.cost.toString())`)
+      }
   }
   return tpArray
   }
@@ -273,36 +252,34 @@ describe('[Mint] entrypoint', async () => {
  
 //CONSTANTS
 
-
-
 describe('[Make Offer] 1', async () => {
-
-  let description : string = "workds"
-  const entrypoint = () => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, {as: collector_one, amount: MO1_BID})
   let MO1_BID : Tez = new Tez(10)
+  const call_params : Parameters = {
+    as: collector_one,
+    amount: new Tez(10)
+  }
+
+  let description : string = "Collector one makes an offer for token 1 for 10 tez via marketplace_one"
+  const entrypoint = (call_params : Parameters) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, call_params)
   let tpListOne : Array<testParams> = [{
     description: "creator_one recieves 1/10 of bid as creator_fee",
     account: creator_one,
-    amount: MO1_BID.to_big_number().times(creatorRateBN),
-    direction: "increase",
+    expected_change: new BigNumber(1),
   } as testParams,
   {
     description: "minter_one recieves 1/100 of bid as minter_fee",
     account: minter_one,
-    amount: MO1_BID.to_big_number().times(minterRateBN),
-    direction: "increase",
+    expected_change: new BigNumber(0.1)
   } as testParams,
   {
     description: "marketplace_one recieves no fee",
     account: marketplace_one,
-    direction: "unchanged"
+    expected_change: new BigNumber(0),
   } as testParams,
   {
     description: "collector_one pays bid",
     account: collector_one,
-    amount: MO1_BID.to_big_number(),
-    direction: "decrease",
-    caller: true
+    expected_change: new BigNumber(10).negated(),
   } as testParams
   ]
 
@@ -312,7 +289,7 @@ before(async function() {
 tpListOne = await generate_test_params_array(
   description,
   tpListOne,
-  collector_one, 
+  call_params, 
   entrypoint)
 //   let MO1_BID : Tez
 //   let MO1_CR : CallResult
