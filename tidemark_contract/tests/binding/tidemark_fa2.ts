@@ -720,11 +720,10 @@ const mint_arg_to_mich = (tmd: Array<[
 const burn_arg_to_mich = (tid: att.Nat): att.Micheline => {
     return tid.to_mich();
 }
-const make_offer_arg_to_mich = (mo_token_id: att.Nat, mo_marketplace: att.Address, mo_bid: att.Tez): att.Micheline => {
+const make_offer_arg_to_mich = (mo_token_id: att.Nat, mo_marketplace: att.Address): att.Micheline => {
     return att.pair_to_mich([
         mo_token_id.to_mich(),
-        mo_marketplace.to_mich(),
-        mo_bid.to_mich()
+        mo_marketplace.to_mich()
     ]);
 }
 const sell_arg_to_mich = (s_token_id: att.Nat): att.Micheline => {
@@ -872,9 +871,9 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
-    async make_offer(mo_token_id: att.Nat, mo_marketplace: att.Address, mo_bid: att.Tez, params: Partial<ex.Parameters>): Promise<att.CallResult> {
+    async make_offer(mo_token_id: att.Nat, mo_marketplace: att.Address, params: Partial<ex.Parameters>): Promise<att.CallResult> {
         if (this.address != undefined) {
-            return await ex.call(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace, mo_bid), params);
+            return await ex.call(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace), params);
         }
         throw new Error("Contract not initialised");
     }
@@ -983,9 +982,9 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
-    async get_make_offer_param(mo_token_id: att.Nat, mo_marketplace: att.Address, mo_bid: att.Tez, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
+    async get_make_offer_param(mo_token_id: att.Nat, mo_marketplace: att.Address, params: Partial<ex.Parameters>): Promise<att.CallParameter> {
         if (this.address != undefined) {
-            return await ex.get_call_param(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace, mo_bid), params);
+            return await ex.get_call_param(this.address, "make_offer", make_offer_arg_to_mich(mo_token_id, mo_marketplace), params);
         }
         throw new Error("Contract not initialised");
     }
@@ -1089,45 +1088,38 @@ export class Tidemark_fa2 {
         }
         throw new Error("Contract not initialised");
     }
-    async get_tidemark(): Promise<att.Tez> {
-        if (this.address != undefined) {
-            const storage = await ex.get_raw_storage(this.address);
-            return att.Tez.from_mich((storage as att.Mpair).args[8]);
-        }
-        throw new Error("Contract not initialised");
-    }
     async get_bid_asset(): Promise<bid_asset_container> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[9], (x, y) => [att.mich_to_string(x), bid_asset_value.from_mich(y)]);
+            return att.mich_to_map((storage as att.Mpair).args[8], (x, y) => [att.mich_to_string(x), bid_asset_value.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
     async get_ownership_asset(): Promise<ownership_asset_container> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[10], (x, y) => [att.mich_to_string(x), ownership_asset_value.from_mich(y)]);
+            return att.mich_to_map((storage as att.Mpair).args[9], (x, y) => [att.mich_to_string(x), ownership_asset_value.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
     async get_sp_ownership_asset(): Promise<sp_ownership_asset_container> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[11], (x, y) => [att.mich_to_string(x), sp_ownership_asset_value.from_mich(y)]);
+            return att.mich_to_map((storage as att.Mpair).args[10], (x, y) => [att.mich_to_string(x), sp_ownership_asset_value.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
     async get_sp_band_asset(): Promise<sp_band_asset_container> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[12], (x, y) => [band.from_mich(x), sp_band_asset_value.from_mich(y)]);
+            return att.mich_to_map((storage as att.Mpair).args[11], (x, y) => [band.from_mich(x), sp_band_asset_value.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
     async get_ledger_value(key: att.Nat): Promise<ledger_value | undefined> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[13]).toString()), key.to_mich(), ledger_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[12]).toString()), key.to_mich(), ledger_key_mich_type);
             if (data != undefined) {
                 return ledger_value.from_mich(data);
             }
@@ -1140,7 +1132,7 @@ export class Tidemark_fa2 {
     async has_ledger_value(key: att.Nat): Promise<boolean> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[13]).toString()), key.to_mich(), ledger_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[12]).toString()), key.to_mich(), ledger_key_mich_type);
             if (data != undefined) {
                 return true;
             }
@@ -1153,7 +1145,7 @@ export class Tidemark_fa2 {
     async get_operator_value(key: operator_key): Promise<operator_value | undefined> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[14]).toString()), key.to_mich(), operator_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[13]).toString()), key.to_mich(), operator_key_mich_type);
             if (data != undefined) {
                 return operator_value.from_mich(data);
             }
@@ -1166,7 +1158,7 @@ export class Tidemark_fa2 {
     async has_operator_value(key: operator_key): Promise<boolean> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[14]).toString()), key.to_mich(), operator_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[13]).toString()), key.to_mich(), operator_key_mich_type);
             if (data != undefined) {
                 return true;
             }
@@ -1179,7 +1171,7 @@ export class Tidemark_fa2 {
     async get_operator_for_all_value(key: operator_for_all_key): Promise<operator_for_all_value | undefined> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[15]).toString()), key.to_mich(), operator_for_all_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[14]).toString()), key.to_mich(), operator_for_all_key_mich_type);
             if (data != undefined) {
                 return operator_for_all_value.from_mich(data);
             }
@@ -1192,7 +1184,7 @@ export class Tidemark_fa2 {
     async has_operator_for_all_value(key: operator_for_all_key): Promise<boolean> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[15]).toString()), key.to_mich(), operator_for_all_key_mich_type);
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[14]).toString()), key.to_mich(), operator_for_all_key_mich_type);
             if (data != undefined) {
                 return true;
             }
@@ -1205,7 +1197,7 @@ export class Tidemark_fa2 {
     async get_next_token_id(): Promise<att.Nat> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.Nat.from_mich((storage as att.Mpair).args[16]);
+            return att.Nat.from_mich((storage as att.Mpair).args[15]);
         }
         throw new Error("Contract not initialised");
     }
@@ -1215,21 +1207,21 @@ export class Tidemark_fa2 {
     ]>> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_map((storage as att.Mpair).args[17], (x, y) => [band.from_mich(x), att.Duration.from_mich(y)]);
+            return att.mich_to_map((storage as att.Mpair).args[16], (x, y) => [band.from_mich(x), att.Duration.from_mich(y)]);
         }
         throw new Error("Contract not initialised");
     }
     async get_refund_owed_list(): Promise<Array<att.Tez>> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            return att.mich_to_list((storage as att.Mpair).args[18], x => { return att.Tez.from_mich(x); });
+            return att.mich_to_list((storage as att.Mpair).args[17], x => { return att.Tez.from_mich(x); });
         }
         throw new Error("Contract not initialised");
     }
     async get_metadata_value(key: string): Promise<att.Bytes | undefined> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[19]).toString()), att.string_to_mich(key), att.prim_annot_to_mich_type("string", []));
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[18]).toString()), att.string_to_mich(key), att.prim_annot_to_mich_type("string", []));
             if (data != undefined) {
                 return att.Bytes.from_mich(data);
             }
@@ -1242,7 +1234,7 @@ export class Tidemark_fa2 {
     async has_metadata_value(key: string): Promise<boolean> {
         if (this.address != undefined) {
             const storage = await ex.get_raw_storage(this.address);
-            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[19]).toString()), att.string_to_mich(key), att.prim_annot_to_mich_type("string", []));
+            const data = await ex.get_big_map_value(BigInt(att.Int.from_mich((storage as att.Mpair).args[18]).toString()), att.string_to_mich(key), att.prim_annot_to_mich_type("string", []));
             if (data != undefined) {
                 return true;
             }
@@ -1264,7 +1256,6 @@ export class Tidemark_fa2 {
         tm_r6: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"tm_r6\"")]),
         tm_r3: att.string_to_mich("\"cannot make offer on your own token\""),
         tm_r2: att.string_to_mich("\"bid must be greater than 0\""),
-        tm_r1: att.string_to_mich("\"bid did not equal transferred\""),
         fa2_r7: att.string_to_mich("\"FA2_NOT_OWNER\""),
         fa2_r6: att.pair_to_mich([att.string_to_mich("\"INVALID_CONDITION\""), att.string_to_mich("\"fa2_r6\"")]),
         FA2_TOKEN_UNDEFINED: att.string_to_mich("\"FA2_TOKEN_UNDEFINED\""),

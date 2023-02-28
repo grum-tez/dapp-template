@@ -112,15 +112,21 @@ export class TezDate implements ArchetypeType {
 
 
 
+
+
 /* Utils ------------------------------------------------------------------- */
 
-
+  interface costObject {
+    call_name: string,
+    apparent_cost: BigNumber,
+  }
 
   interface testParams {
+    name: string,
     description: string,
     account : Account,
     expected_change: number,
-    ec_BN: BigNumber,
+    ec_BN: BigNumber, // expected_change as BigNumber
     expected_direction: "increase" | "decrease" | "unchanged",
     expected_amount: string,
     actual_before: BigNumber,
@@ -128,13 +134,23 @@ export class TezDate implements ArchetypeType {
     expected_after: BigNumber,
     error_message: string
     info_message: string,
-    accumulated_cost: BigNumber
+    accumulated_cost: BigNumber,
+    cost_array: costObject[],
+
     // variable_function: 
     // variable_before: any,
     // variable_after: any,
 
   }
 
+  interface CallMaker {
+    name: string,
+    description: string,
+    as: Account,
+    amount: Tez,
+    call: (call_params: Parameters) => Promise<any>
+    delay_after: number
+  }
 
 function posify (num : BigNumber) : BigNumber {
   if (num.isNegative()) return num.negated()
@@ -146,19 +162,19 @@ function negify (num : BigNumber) : BigNumber {
   return num
 }
 // with_cost function provides the cost of a transaction
-const call_get_balance_delta = async (f : { (call_params : Parameters) : Promise<any> }, call_params: Parameters) : Promise<BigNumber> => {
+const make_call_get_delta = async (f : { (call_params : Parameters) : Promise<any> }, call_params: Parameters) : Promise<BigNumber> => {
   const balance_before = await call_params.as.get_balance();
   const res = await f(call_params);
   const balance_after = await call_params.as.get_balance();
   return balance_before.to_big_number().minus(balance_after.to_big_number());
 }
 
- async function generate_test_params_array(
-  description: string,
-  tpArray: Array<testParams>,
-  delay_mockup_after: number,
-  calls : {cp: Parameters, fn: (call_params: Parameters) => Promise<CallResult>
-  }[]) : Promise<testParams[]> {
+ async function run_scenario_test(
+  scenario_description: string,
+  call_makers : CallMaker[],
+  tpArray: Array<testParams>
+  ) : Promise<testParams[]> {
+    
     for (const tp of tpArray) {
       tp.ec_BN = new BigNumber(tp.expected_change).times(1000000)
       tp.actual_before = (await tp.account.get_balance()).to_big_number()
@@ -166,36 +182,31 @@ const call_get_balance_delta = async (f : { (call_params : Parameters) : Promise
       tp.ec_BN.isPositive() ? "increase" : "decrease"
       tp.expected_amount = new Tez(posify(tp.ec_BN), 'mutez').toString('tez')
       tp.accumulated_cost = new BigNumber(0)
+      tp.cost_array = []
     }
 
- for (const call of calls){
-  let balance_delta = await call_get_balance_delta(call.fn, call.cp)
-  console.log("balance_delta" , tezBNtoString(balance_delta))
-  const costGuess = balance_delta.minus(call.cp.amount.to_big_number())
-  console.log("costGuess" , tezBNtoString(costGuess))
+ for (const cm of call_makers){
+  if (!cm.amount) throw "amount must be explicitly specified for account: " + cm.as.get_name()
+  if (!cm.as) throw "account must be explicitly specified for m cms"
   
-  const target_tp_index = tpArray.findIndex(tp => tp.account === call.cp.as)
-  const cost_accumulator = tpArray[target_tp_index].accumulated_cost.plus(costGuess)
-  console.log("cost_accumulator before" , tezBNtoString(cost_accumulator))
+  let balance_delta = await make_call_get_delta(cm.call, {as: cm.as, amount: cm.amount})
+  const apparent_cost = balance_delta.minus(cm.amount.to_big_number())
+  const target_tp_index = tpArray.findIndex(tp => tp.account === cm.as)
+  const cost_accumulator = tpArray[target_tp_index].accumulated_cost.plus(apparent_cost)
   tpArray[target_tp_index].accumulated_cost = cost_accumulator
-  console.log("cost_accumulator after" , tezBNtoString(cost_accumulator))
-// TODO: Move mockup delay from the main function parameter into the "calls" array parameter
-delay_mockup_now_by_second(delay_mockup_after)
- }
+  tpArray[target_tp_index].cost_array.push({call_name: cm.name, apparent_cost: apparent_cost})
+
+  delay_mockup_now_by_second(cm.delay_after)
+   }
 for (const tp of tpArray) {
   
   const actual_before = tp.actual_before
   const actual_after = await (await tp.account.get_balance()).to_big_number()
-  
-    console.log(tp.account.get_name(), tp.accumulated_cost.toString())
-    console.log("expected after before", actual_before.plus(tp.ec_BN).toString())
-    console.log("actual after", actual_after.toString())
   const expected_after = actual_before.plus(tp.ec_BN).minus(tp.accumulated_cost)
-  console.log("expected after after", expected_after.toString())
   const actual_change = actual_after.minus(actual_before)
   const actual_direction = actual_change.isZero() ? "unchanged" : 
         actual_change.isPositive() ? "increase" : "decrease"
-  const actual_amount = new Tez(posify(actual_change), 'mutez').toString('tez')
+  const actual_amount = tezBNtoString(posify(actual_change))
 
   const testError : string = 
   `ERROR: ${tp.account.get_name()} :
@@ -210,22 +221,17 @@ for (const tp of tpArray) {
     tp.expected_after = expected_after
 
 
-    // assert(actual_after.isEqualTo(expected_after), testError) 
-  // } else {
-  //   assert(actual_after.isLessThan(expected_after), testError)
-  //   const apparent_gas_cost = expected_after.minus(actual_after)
-  //   assert(apparent_gas_cost.isLessThan(new BigNumber(0.0000005)),
-  //  `apparent gas cost is suspiciously high: " + ${tezBigNumberToString(apparent_gas_cost)}\n
-  //  entrypoint: ${entrypoint}\n
-  //  caller: ${tp.account.get_name()}\n`)
-  //   }
-
   //TODO FIX THIS UP:::
-    // const successMessage = `${tp.account.get_name()} : ${actual_direction} : ${actual_amount}`
-    // tp.info_message = successMessage
-    //   if (tp.account === call.cp.as) {
-    //     tp.info_message += `\n apparent cost: ${tp.cost.toString()}`
-    //   }
+    const successMessage = `\t${tp.account.get_name()} : ${actual_direction} by ${actual_amount}`
+    tp.info_message = successMessage
+    if (tp.cost_array.length > 0) {
+      tp.cost_array.forEach(costObject => {
+        tp.info_message += `\n\tCost to call '${costObject.call_name}' : ${tezBNtoString(costObject.apparent_cost)}`
+      })
+      tp.info_message += `\n\tTotal_costs: ${tezBNtoString(tp.accumulated_cost)}`
+      
+    }
+
   }
   return tpArray
   }
@@ -298,27 +304,44 @@ describe('[Mint] entrypoint', async () => {
  
 //CONSTANTS
 
-describe('[Make Offer] 1', async () => {
+describe('[Make Offer] 2 successful calls', async () => {
 
-  //ENTRYPOINT CALLS AND THEIR CALL PARAMETERS
-  let description : string = "Collector one makes an offer for token 1 for 10 tez via marketplace_one"
-  
-  let MO1_BID : Tez = new Tez(5)
-  const call_params_one : Parameters = {
-    as: collector_one,
-    amount: MO1_BID
-  }
-  const make_offer_one = (call_params : Parameters) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO1_BID, call_params)
-
-  let MO2_BID : Tez = new Tez(10)
-  const call_params_two : Parameters = {
-    as: collector_two,
-    amount: MO2_BID
-  }
-  const make_offer_two = (call_params: Parameters) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO2_BID, call_params) // params
+  before(async function() {
+    //NOTE that this before block is actually being run AFTER tpDataArray and then the it blocks are defined,
+    //but BEFORE the actual content of the it blocks are run.
+    
+    //ENTRYPOINT CALLS AND THEIR CALL PARAMETERS
+    
+    testDataArray = await run_scenario_test(
+      //Scenario Description:
+      "Collector one makes an offer for token 1 for 10 tez via marketplace_one",
+      //Array of calls to make:
+      [{
+        name: "C2 bid 5",
+        // description: "Collector two makes an offer for 5 tez on token one via marketplace_one",
+        as: collector_two, 
+        amount: new Tez(5), 
+        call: (cp) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, cp),
+        delay_after: 100
+      } as CallMaker, 
+      { 
+        name: "C1 bid 10",
+        // description: "Collector one makes an offer for 10 tez on token one via marketplace_one",
+        as: collector_one,
+        amount: new Tez(10), 
+        call: (cp) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, cp),
+        delay_after: 150
+      } as CallMaker,
+    ],
+    //Don't plug the test data array into the testDataArray parameter directly 
+    //- it has to be in the top level of the describe block, or mocha won't be able to handle it
+    testDataArray
+  )
+  })
 
   //LIST OF ACCOUNTS TO TEST AND EXPECTED CHANGES
-  let tpListOne : Array<testParams> = [{
+
+  let testDataArray : Array<testParams> = [{
     description: "creator_one recieves 1/10 of bid as creator_fee",
     account: creator_one,
     expected_change: 1,
@@ -334,90 +357,92 @@ describe('[Make Offer] 1', async () => {
     expected_change: 0,
   } as testParams,
   {
-    description: "collector_one bids unsuccessfully",
+    description: "collector_one pays bid",
     account: collector_one,
-    expected_change: 0,
+    expected_change: -10,
   } as testParams,
   {
-    description: "collector_two pays bid",
+    description: "collector_two bids unsuccessfully",
     account: collector_two,
-    expected_change: -10,
+    expected_change: 0,
   } as testParams
   ]
 
-before(async function() {
-  //NOTE that this before block is actually being run AFTER tpList and then the it blocks are defined,
-  //but BEFORE the actual content of the it blocks are run
-tpListOne = await generate_test_params_array(
-  description,
-  tpListOne,
-  // call_params,
-  100,
-  [
-    {cp: call_params_one, fn: make_offer_one}, 
-    {cp: call_params_two, fn: make_offer_two}
-  ]
-)
+  //EXECUTE TESTS FROM ARRAY.
+  //This cannot be refactored into a function because mocha only looks for 
+  //'it' tests in describe blocks, not in lower scope functions.
+  for (const tp of testDataArray) {
+  it(`${tp.description}`, async function() {
+    this.tp = tp
+          assert(tp.actual_after.isEqualTo(tp.expected_after), tp.error_message) 
+      })
+    }
+
+  afterEach(async function() {
+    if (this.tp && this.tp.info_message) {
+      console.log(this.tp.info_message)
+    }
+  })
 })
 
-
-for (const tp of tpListOne) {
-it(`${tp.description}`, async function() {
-  this.tp = tp
+// describe('[Sell] Make one sell call', async () => {
+//   //ENTRYPOINT CALLS AND THEIR CALL PARAMETERS
+//   let description : string = "Single sale"
   
-         assert(tp.actual_after.isEqualTo(tp.expected_after), tp.error_message) 
+//   const call_params_one : Parameters = {
+//     as: collector_one,
+//     amount: new Tez(0)
+//   }
+//   const sell = (call_params : Parameters) => tidemark_fa2...
 
-    })
+  // const call_params_two : Parameters = {
+  //   as: collector_two,
+  //   amount: new Tez(0)
+  // }
+  // const make_offer_two = (call_params: Parameters) => tidemark_fa2...
 
-  }
+  //LIST OF ACCOUNTS TO TEST AND EXPECTED CHANGES
+  // let tpDataArray : Array<testParams> = [{
+  //   description: "template",
+  //   account: account_one,
+  //   expected_change: 1,
+  // } as testParams,
+  // {
+  //   description: "tmeplate",
+  //   account: account_two,
+  //   expected_change: 2
+  // } as testParams,
+  // ]
 
-  // Argument of type '[{ cp: Parameters; fn: (call_params: Parameters) => Promise<CallResult>; }, { cp: Parameters; fn: (call_params: Parameters) => Promise<...>; }]'
-  //  is not assignable to parameter of type 
-  //  '[{ cp: Parameters; fn: (call_params: Parameters) => Promise<CallResult>; }]'.
-  // Source has 2 element(s) but target allows only 1.
-
-  // it('variable test - tidemark  ', async () => {
-  
-  //   const ledger_1 = await tidemark_fa2.get_ledger_value(new Nat(1))
-  //   console.log(make_object_readable(ledger_1))
-  //   const tidemark_before = ledger_1?.l_tidemark
-  //   assert(tidemark_before?.equals(new Tez(10)), "tidemark should be 10 tez")
+  // before(async function() {
+    //NOTE that this before block is actually being run AFTER tpDataArray and then the it blocks are defined,
+    //but BEFORE the actual content of the it blocks are run. That's why it is placed here in the doc
+  // tpDataArray = await run_scenario_test(
+  //   description,
+  //   tpDataArray,
+  //   100,
+  //   [
+  //     {cp: call_params_one, fn: make_offer_one}, 
+  //     {cp: call_params_two, fn: make_offer_two}
+  //   ]
+  // )
   // })
 
+//   for (const tp of tpDataArray) {
+//   it(`${tp.description}`, async function() {
+//     this.tp = tp
+//           assert(tp.actual_after.isEqualTo(tp.expected_after), tp.error_message) 
+//       })
+//     }
 
-  // it('Second lower offer fails', async () => {
-  // expect_to_fail(async () => {
-  // await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
-  // }, att.string_to_mich("incoming bid must be greater than current bid"))
-
-  // })
-
-  // it('Second higher offer succeeds  ', async () => {
-  
-  //   const ledger_1 = await tidemark_fa2.get_ledger_value(new Nat(1))
-  //   const tidemark_before = ledger_1?.l_tidemark
-  //   assert(tidemark_before?.equals(new Tez(10)), "tidemark should be 10 tez")
-  //   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(20), {as: collector_one, amount: new Tez(20)}) // params
-    
-  //   const ledger_1_after = await tidemark_fa2.get_ledger_value(new Nat(1))
-  //   const tidemark_after = ledger_1_after?.l_tidemark
-  
-  //   assert(tidemark_after?.equals(new Tez(20)), "tidemark should be 20 tez")
-  //   delay_mockup_now_by_minute(400)
-  
-  //   })
-
-afterEach(async function() {
-  if (this.tp && this.tp.info_message) {
-    console.log(this.tp.info_message)
-  }
+//   afterEach(async function() {
+//     if (this.tp && this.tp.info_message) {
+//       console.log(this.tp.info_message)
+//     }
+//   })
+// })
 
 
-   
-
-})
-
-})
 
 
 // describe('[sell] entrypoint', async () => {
@@ -511,17 +536,109 @@ function tezBNtoString (input : BigNumber) {
 
 
 
-//TEMPLATE
-
-// describe('[ENTRYPOINT_NAME] entrypoint', async () => {
-
-
-//   it('Fails something or does something', async () => {
-
-//   })
-// })
-
-
 
 
 //completium-cli set binary path archetype
+
+
+  // Argument of type '[{ cp: Parameters; fn: (call_params: Parameters) => Promise<CallResult>; }, { cp: Parameters; fn: (call_params: Parameters) => Promise<...>; }]'
+  //  is not assignable to parameter of type 
+  //  '[{ cp: Parameters; fn: (call_params: Parameters) => Promise<CallResult>; }]'.
+  // Source has 2 element(s) but target allows only 1.
+
+  // it('variable test - tidemark  ', async () => {
+  
+  //   const ledger_1 = await tidemark_fa2.get_ledger_value(new Nat(1))
+  //   console.log(make_object_readable(ledger_1))
+  //   const tidemark_before = ledger_1?.l_tidemark
+  //   assert(tidemark_before?.equals(new Tez(10)), "tidemark should be 10 tez")
+  // })
+
+
+  // it('Second lower offer fails', async () => {
+  // expect_to_fail(async () => {
+  // await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(3), {as: collector_two, amount: new Tez(3)})
+  // }, att.string_to_mich("incoming bid must be greater than current bid"))
+
+  // })
+
+  // it('Second higher offer succeeds  ', async () => {
+  
+  //   const ledger_1 = await tidemark_fa2.get_ledger_value(new Nat(1))
+  //   const tidemark_before = ledger_1?.l_tidemark
+  //   assert(tidemark_before?.equals(new Tez(10)), "tidemark should be 10 tez")
+  //   await tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, new Tez(20), {as: collector_one, amount: new Tez(20)}) // params
+    
+  //   const ledger_1_after = await tidemark_fa2.get_ledger_value(new Nat(1))
+  //   const tidemark_after = ledger_1_after?.l_tidemark
+  
+  //   assert(tidemark_after?.equals(new Tez(20)), "tidemark should be 20 tez")
+  //   delay_mockup_now_by_minute(400)
+  
+  //   })
+
+
+
+
+
+
+
+
+  ///// TEMPLATE TEMPLATE TEMPLATE //////
+
+  // describe('[TEMPLATE] template', async () => {
+  //ENTRYPOINT CALLS AND THEIR CALL PARAMETERS
+  // let description : string = "Template"
+  
+  // const call_params_one : Parameters = {
+  //   as: collector_one,
+  //   amount: new Tez(0)
+  // }
+  // const make_offer_one = (call_params : Parameters) => tidemark_fa2...
+
+  // const call_params_two : Parameters = {
+  //   as: collector_two,
+  //   amount: new Tez(0)
+  // }
+  // const make_offer_two = (call_params: Parameters) => tidemark_fa2...
+
+  //LIST OF ACCOUNTS TO TEST AND EXPECTED CHANGES
+  // let tpDataArray : Array<testParams> = [{
+  //   description: "template",
+  //   account: account_one,
+  //   expected_change: 1,
+  // } as testParams,
+  // {
+  //   description: "tmeplate",
+  //   account: account_two,
+  //   expected_change: 2
+  // } as testParams,
+  // ]
+
+  // before(async function() {
+    //NOTE that this before block is actually being run AFTER tpDataArray and then the it blocks are defined,
+    //but BEFORE the actual content of the it blocks are run. That's why it is placed here in the doc
+  // tpDataArray = await run_scenario_test(
+  //   description,
+  //   tpDataArray,
+  //   100,
+  //   [
+  //     {cp: call_params_one, fn: make_offer_one}, 
+  //     {cp: call_params_two, fn: make_offer_two}
+  //   ]
+  // )
+  // })
+
+//   for (const tp of tpDataArray) {
+//   it(`${tp.description}`, async function() {
+//     this.tp = tp
+//           assert(tp.actual_after.isEqualTo(tp.expected_after), tp.error_message) 
+//       })
+//     }
+
+//   afterEach(async function() {
+//     if (this.tp && this.tp.info_message) {
+//       console.log(this.tp.info_message)
+//     }
+//   })
+// })

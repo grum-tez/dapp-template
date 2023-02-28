@@ -430,12 +430,11 @@ entry burn(tid : nat) {
  
 entry make_offer(
   mo_token_id : nat,
-  mo_marketplace: address,
-  mo_bid: tez,
+  mo_marketplace: address
   ) {
     require { 
-      tm_r1: mo_bid = transferred otherwise "bid did not equal transferred";
-      tm_r2: mo_bid > 0tz otherwise "bid must be greater than 0";
+      // tm_r1: transferred = transferred otherwise "bid did not equal transferred";
+      tm_r2: transferred > 0tz otherwise "bid must be greater than 0";
       tm_r3: ledger[mo_token_id].l_token_owner <> caller otherwise "cannot make offer on your own token";
      // tm_r4: Auction must not have concluded
      // tm_r5: mo_marketplace must hold a marketplace token
@@ -454,11 +453,11 @@ entry make_offer(
       const minter_rate = ledger[mo_token_id].l_minter_rate;
       const tidemark = ledger[mo_token_id].l_tidemark;
 
-      do_require(mo_bid > last_bid, "incoming bid must be greater than current bid");
+      do_require(transferred > last_bid, "incoming bid must be greater than current bid");
       
     //track the token balance locally...
      var mo_token_balance_tracker = ledger[mo_token_id].l_token_balance;
-      mo_token_balance_tracker += mo_bid;
+      mo_token_balance_tracker += transferred;
 
 
       //If there was a past bid...
@@ -471,7 +470,7 @@ entry make_offer(
 
     //if the tidemark has been passed, then update the tidemark...
     if (transferred > tidemark) then begin
-      const increase = mo_bid - tidemark; //SHOULD BE TIDEMARK, NOT LAST BID
+      const increase = transferred - tidemark; //SHOULD BE TIDEMARK, NOT LAST BID
       const creator_fee = creator_rate * increase;
       const minter_fee = minter_rate * increase;
       //...and pay the creator and minter their fees.
@@ -496,7 +495,7 @@ entry make_offer(
     const new_bid_id = make_bid_id(mo_token_id, new_bid_number);
     ledger[mo_token_id].l_bids.add({
       bid_id = new_bid_id;
-      bid = mo_bid;
+      bid = transferred;
       bidder = caller;
       marketplace = mo_marketplace
       });
