@@ -73,8 +73,8 @@ if (x instanceof Bytes) return x.toString()
 if (x instanceof Enum) return x.toString()
 if (x instanceof Nat) return x.toString()
 if (x instanceof Rational) return x.toString()
-if (x instanceof Duration) return x.toString()
-if (x instanceof Tez) return x.toString("tez") + "tez"
+if (x instanceof Duration) return x.toString() + "seconds"
+if (x instanceof Tez) return x.toString("tez") + " tez"
 return x
 }
 
@@ -119,7 +119,8 @@ export class TezDate implements ArchetypeType {
   interface testParams {
     description: string,
     account : Account,
-    expected_change: BigNumber,
+    expected_change: number,
+    ec_BN: BigNumber,
     expected_direction: "increase" | "decrease" | "unchanged",
     expected_amount: string,
     actual_before: BigNumber,
@@ -129,8 +130,8 @@ export class TezDate implements ArchetypeType {
     info_message: string,
     accumulated_cost: BigNumber
     // variable_function: 
-    variable_before: any,
-    variable_after: any,
+    // variable_before: any,
+    // variable_after: any,
 
   }
 
@@ -145,7 +146,7 @@ function negify (num : BigNumber) : BigNumber {
   return num
 }
 // with_cost function provides the cost of a transaction
-const with_cost = async (f : { (call_params : Parameters) : Promise<any> }, call_params: Parameters) : Promise<BigNumber> => {
+const call_get_balance_delta = async (f : { (call_params : Parameters) : Promise<any> }, call_params: Parameters) : Promise<BigNumber> => {
   const balance_before = await call_params.as.get_balance();
   const res = await f(call_params);
   const balance_after = await call_params.as.get_balance();
@@ -159,22 +160,25 @@ const with_cost = async (f : { (call_params : Parameters) : Promise<any> }, call
   calls : {cp: Parameters, fn: (call_params: Parameters) => Promise<CallResult>
   }[]) : Promise<testParams[]> {
     for (const tp of tpArray) {
-      tp.expected_change = new BigNumber(tp.expected_change).times(1000000)
+      tp.ec_BN = new BigNumber(tp.expected_change).times(1000000)
       tp.actual_before = (await tp.account.get_balance()).to_big_number()
-      tp.expected_direction = tp.expected_change.isZero() ? "unchanged" : 
-      tp.expected_change.isPositive() ? "increase" : "decrease"
-      tp.expected_amount = new Tez(posify(tp.expected_change), 'mutez').toString('tez')
+      tp.expected_direction = tp.ec_BN.isZero() ? "unchanged" : 
+      tp.ec_BN.isPositive() ? "increase" : "decrease"
+      tp.expected_amount = new Tez(posify(tp.ec_BN), 'mutez').toString('tez')
       tp.accumulated_cost = new BigNumber(0)
     }
 
  for (const call of calls){
-  let callerTotalSpent = await with_cost(call.fn, call.cp)
-  const costGuess = callerTotalSpent.minus(call.cp.amount.to_big_number())
+  let balance_delta = await call_get_balance_delta(call.fn, call.cp)
+  console.log("balance_delta" , tezBNtoString(balance_delta))
+  const costGuess = balance_delta.minus(call.cp.amount.to_big_number())
+  console.log("costGuess" , tezBNtoString(costGuess))
   
   const target_tp_index = tpArray.findIndex(tp => tp.account === call.cp.as)
-  const cost_add = tpArray[target_tp_index].accumulated_cost.plus(costGuess)
-  tpArray[target_tp_index].accumulated_cost = cost_add
-
+  const cost_accumulator = tpArray[target_tp_index].accumulated_cost.plus(costGuess)
+  console.log("cost_accumulator before" , tezBNtoString(cost_accumulator))
+  tpArray[target_tp_index].accumulated_cost = cost_accumulator
+  console.log("cost_accumulator after" , tezBNtoString(cost_accumulator))
 // TODO: Move mockup delay from the main function parameter into the "calls" array parameter
 delay_mockup_now_by_second(delay_mockup_after)
  }
@@ -183,14 +187,11 @@ for (const tp of tpArray) {
   const actual_before = tp.actual_before
   const actual_after = await (await tp.account.get_balance()).to_big_number()
   
-  // tp.cost = tp.account === call_params.as ? callerTotalSpent.minus(posify(tp.expected_change)) : new BigNumber(0)
-  // if (tp.account === call_params.as) {
-    // console.log("tp.cost", tp.cost.toString())
-    
-    // }
-    //TODO: this line below is broken:
-  const expected_after = actual_before.plus(tp.expected_change).minus(tp.accumulated_cost)
-    
+    console.log(tp.account.get_name(), tp.accumulated_cost.toString())
+    console.log("expected after before", actual_before.plus(tp.ec_BN).toString())
+    console.log("actual after", actual_after.toString())
+  const expected_after = actual_before.plus(tp.ec_BN).minus(tp.accumulated_cost)
+  console.log("expected after after", expected_after.toString())
   const actual_change = actual_after.minus(actual_before)
   const actual_direction = actual_change.isZero() ? "unchanged" : 
         actual_change.isPositive() ? "increase" : "decrease"
@@ -298,6 +299,8 @@ describe('[Mint] entrypoint', async () => {
 //CONSTANTS
 
 describe('[Make Offer] 1', async () => {
+
+  //ENTRYPOINT CALLS AND THEIR CALL PARAMETERS
   let description : string = "Collector one makes an offer for token 1 for 10 tez via marketplace_one"
   
   let MO1_BID : Tez = new Tez(5)
@@ -309,30 +312,36 @@ describe('[Make Offer] 1', async () => {
 
   let MO2_BID : Tez = new Tez(10)
   const call_params_two : Parameters = {
-    as: collector_one,
+    as: collector_two,
     amount: MO2_BID
   }
   const make_offer_two = (call_params: Parameters) => tidemark_fa2.make_offer(new Nat(1), marketplace_one_address, MO2_BID, call_params) // params
 
+  //LIST OF ACCOUNTS TO TEST AND EXPECTED CHANGES
   let tpListOne : Array<testParams> = [{
     description: "creator_one recieves 1/10 of bid as creator_fee",
     account: creator_one,
-    expected_change: new BigNumber(1),
+    expected_change: 1,
   } as testParams,
   {
     description: "minter_one recieves 1/100 of bid as minter_fee",
     account: minter_one,
-    expected_change: new BigNumber(0.1)
+    expected_change: 0.1
   } as testParams,
   {
     description: "marketplace_one recieves no fee",
     account: marketplace_one,
-    expected_change: new BigNumber(0),
+    expected_change: 0,
   } as testParams,
   {
-    description: "collector_one pays bid",
+    description: "collector_one bids unsuccessfully",
     account: collector_one,
-    expected_change: new BigNumber(10).negated(),
+    expected_change: 0,
+  } as testParams,
+  {
+    description: "collector_two pays bid",
+    account: collector_two,
+    expected_change: -10,
   } as testParams
   ]
 
@@ -475,9 +484,9 @@ function tezAsString ( input : Tez) {
   return `${tezAsNumber(input)} tez`
 }
 
-function tezBigNumberToString (input : BigNumber) {
+function tezBNtoString (input : BigNumber) {
   if (input === new BigNumber(0)) return `0 tez`
-  if (input < new BigNumber(0) || !input) throw Error (`tezBigNumberToString input of ${input} is invalid.`)
+  if (!input) throw Error (`tezBigNumberToString input of ${input} is invalid.`)
   return `${input.dividedBy(1000000).toNumber()} tez`
 }
 

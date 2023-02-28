@@ -125,8 +125,6 @@ enum sale_cycle_state =
 | grace_period
 | unclaimed
 
-variable tidemark : tez = 0tz
-
 asset bid_asset identified by bid_id {
   bid_id: string;
   bid_number: nat = 0;
@@ -454,6 +452,7 @@ entry make_offer(
       const last_bidder = last_bid_asset_value.bidder;
       const creator_rate = ledger[mo_token_id].l_creator_rate;
       const minter_rate = ledger[mo_token_id].l_minter_rate;
+      const tidemark = ledger[mo_token_id].l_tidemark;
 
       do_require(mo_bid > last_bid, "incoming bid must be greater than current bid");
       
