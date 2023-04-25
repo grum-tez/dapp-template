@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import * as att from '@completium/archetype-ts-types'
+import { greetName } from 'numinousk'
 import {
   ArchetypeType,
   Rational,
@@ -25,7 +25,7 @@ BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_UP })
 import assert from 'assert'
 
 /* Accounts ---------------------------------------------------------------- */
-
+greetName('frank')
 const creator_one = get_account('creator_one')
 // const owner_one = get_account('owner_one')
 // const owner_two = get_account('owner_two')

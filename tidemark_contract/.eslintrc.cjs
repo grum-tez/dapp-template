@@ -12,7 +12,13 @@ module.exports = {
     tsconfigRootDir: __dirname,
   },
   root: true,
-  ignorePatterns: ['node_modules/', '*.cjs', '*.js', '*.d.ts'],
+  ignorePatterns: [
+    'node_modules/',
+    '*.cjs',
+    '*.js',
+    '*.d.ts',
+    'tests/binding/',
+  ],
 }
 //Parsing error: ESLint was configured to run on `<tsconfigRootDir>/.eslintrc.js` using
 // `parserOptions.project`: <tsconfigRootDir>/../../../../../users/graemeford/royaltiesproject/tidemark-dapp/tidemark_contract/tsconfig.json
